@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import requests
-from PIL import Image
+from PIL import Image, ImageEnhance
 import io
 import os
 import time
@@ -17,7 +17,7 @@ def openImageFromUrl(url):
     response = requests.get(url)
     return Image.open(io.BytesIO(response.content))
 
-def captureStreamAsGif(url, duration=3, fps=10):
+def captureStreamAsGif(url, duration=5, fps=2):
     frames = []
     try:
         stream = requests.get(url, stream=True, timeout=1)
@@ -40,6 +40,11 @@ def captureStreamAsGif(url, duration=3, fps=10):
                 img = Image.open(io.BytesIO(jpg))
                 img.verify()  # Verify the integrity of the image
                 img = Image.open(io.BytesIO(jpg))  # Reload the image without verification
+                            # Enhance brightness and contrast for better visibility in the dark
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(2.0)  # Increase brightness (adjust as needed)
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.5)  # Increase contrast (adjust as needed)
                 frames.append(img)
             except Exception as e:
                 continue
@@ -87,6 +92,7 @@ async def post_gif(interaction: discord.Interaction):
         gif_buffer.seek(0)
         await interaction.response.send_message(file=discord.File(fp=gif_buffer, filename='stream.gif'))
     except Exception as e:
+        print(e)
         await interaction.response.send_message(f'An error occurred: {e}', ephemeral=True)
 
 # Run the bot with your token
