@@ -10,11 +10,13 @@ import imageio
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
 import re
+import json
 
 load_dotenv()
 
 # Replace with your bot's token
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+API_HOST = os.getenv('API_HOST')
 
 
 # Replace with the target user's name
@@ -83,7 +85,6 @@ def react_to_message(message):
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    
     # Find the target guild by name
     target_guild = discord.utils.get(bot.guilds, name=TARGET_GUILD_NAME)
     
@@ -96,7 +97,7 @@ async def on_ready():
         print(f'Loading recent messages from channel: {channel.name}')
         
         # Fetch recent messages from the channel
-        async for message in channel.history(limit=100):  # Adjust limit as needed\
+        async for message in channel.history(limit=1):  # Adjust limit as needed\
                 if should_react_to_message(message):
                     react_to_message(message)
 
@@ -107,6 +108,11 @@ async def on_ready():
                             log_reaction(message, reaction, user)
     print(datetime.now())
     print("done looping")
+    try:
+        synced = await bot.tree.sync()
+        print(f'Synced {len(synced)} commands.')
+    except Exception as e:
+        print(f'Error syncing commands: {e}')
 
 @bot.event
 async def on_message(message):
@@ -126,5 +132,182 @@ async def get_reactions(ctx, message_id: int):
         await ctx.send(f'Reactions for message {message_id}: {reactions_data[message_id]}')
     else:
         await ctx.send('No reactions recorded for this message ID.')
+
+# Define a new slash command to send "hello"
+@bot.tree.command(name="hello")
+async def hello(interaction: discord.Interaction):
+    await interaction.response.send_message("hello")
+
+def format_json(json_string):
+    try:
+        # Parse the JSON string into a Python dictionary
+        data = json.loads(json_string)
+        
+        # Convert the dictionary back to a JSON string with indentation
+        formatted_json = json.dumps(data, indent=4)
+        
+        return formatted_json
+    except json.JSONDecodeError as e:
+        return f"Error decoding JSON: {e}"
+
+@bot.tree.command(name="initiate", description="Initiate a command with an optional argument")
+@app_commands.describe(option="The optional argument, can be 'all'")
+async def initiate(interaction: discord.Interaction, option: str = None):
+    commandname = "g4-sAB.GXC"
+    if option == 'all':
+        await interaction.response.send_message(f"`initiated {commandname} with option {option}.`")
+    else:
+        await interaction.response.send_message(f"`initiated {commandname}.`")
+
+@bot.tree.command(name="create_meme", description="Create a meme")
+@app_commands.describe(visual_file="Upload the image", top_text="Top text of the meme (optional)", bottom_text="Bottom text of the meme (optional)", topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
+async def create_meme(
+    interaction: discord.Interaction,
+    visual_file: discord.Attachment,
+    top_text: str = None,
+    bottom_text: str = None,
+    topics: str = None
+):
+    try:
+        # Acknowledge the interaction to prevent timeout
+        await interaction.response.defer()
+
+        # Download the attachment
+        file_bytes = await visual_file.read()
+        # Prepare the data and files for the request
+        data = {
+            "TopText": top_text,
+            "BottomText": bottom_text,
+            "FileName": visual_file.filename,
+        }
+        if(topics is not None):
+            try:
+                data["Topics"] = json.loads(topics)
+            except Exception as e:
+                return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
+        files = {
+            "VisualFile": (visual_file.filename, file_bytes)
+        }
+        
+        # Make the request to the API
+        response = requests.post(API_HOST + "Memes", data=data, files=files)
+        
+        # Send the result message
+        if response.status_code == 201:
+            await interaction.followup.send("Meme created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        # Handle exceptions and ensure a response is sent
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+@bot.tree.command(name='create_memetext', description='Create a meme text')
+@app_commands.describe(text='The content to create a meme with', position='The position in a meme, can be "toptext" or "bottomtext"', topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
+async def create_memetext(interaction: discord.Interaction, text: str, position: str, topics: str = None):
+    await interaction.response.defer()
+    if(position != "toptext" and position != "bottomtext"):
+        await interaction.followup.send("Choose a position of either \"bottomtext\" or \"toptext\"")
+        return
+
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    
+    data = {
+        'text': text,
+        'position': position == "bottomtext",
+    }
+    
+    if(topics is not None):
+        try:
+            data["Topics"] = json.loads(topics)
+        except Exception as e:
+            return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
+    
+    try:
+        response = requests.post(API_HOST + "texts", headers=headers, json=data)
+        response.raise_for_status()  # Raise an error for bad status codes
+        
+        # Send the result message
+        if response.status_code == 201:
+            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+    except Exception as e:
+        # Handle exceptions and ensure a response is sent
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+@bot.tree.command(name='post_vote', description='Vote on a votable(Meme, MemeVisual, MemeText)')
+@app_commands.describe(ElementId='The ID of the element to vote on.', VoteNumber='The number rating of the vote."')
+async def post_vote(interaction: discord.Interaction, ElementId: str, VoteNumber: int):
+    await interaction.response.defer()
+    if(VoteNumber < 0 or VoteNumber > 9):
+        return await interaction.followup.send("VoteNumber Invalid value: VoteNumber can only be an integer from 0-9.")
+
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    
+    data = {
+        'ElementIDs': "[" + ElementId + "]",
+        'VoteNumber': VoteNumber,
+    }
+    
+    try:
+        response = requests.post(API_HOST + "texts", headers=headers, json=data)
+        response.raise_for_status()  # Raise an error for bad status codes
+        
+        # Send the result message
+        if response.status_code == 201:
+            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+    except Exception as e:
+        # Handle exceptions and ensure a response is sent
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+@bot.tree.command(name="create_memevisual", description="Create a meme")
+@app_commands.describe(file="Upload the image", topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
+async def create_memevisual(
+    interaction: discord.Interaction,
+    file: discord.Attachment,
+    topics: str = None
+):
+    try:
+        # Acknowledge the interaction to prevent timeout
+        await interaction.response.defer()
+
+        # Download the attachment
+        file_bytes = await file.read()
+        
+        # Prepare the data and files for the request
+        data = {
+        }
+        if(topics is not None):
+            try:
+                data["Topics"] = json.loads(topics)
+            except Exception as e:
+                return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
+
+        files = {
+            "File": (file.filename, file_bytes)
+        }
+        
+        # Make the request to the API
+        response = requests.post(API_HOST + "Visuals", data=data, files=files)
+        
+        # Send the result message
+        if response.status_code == 201:
+            await interaction.followup.send("MemeVisual created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create MemeVisual. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        # Handle exceptions and ensure a response is sent
+        await interaction.followup.send(f"An error occurred: {str(e)}")
 
 bot.run(TOKEN)
