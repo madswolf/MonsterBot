@@ -17,6 +17,7 @@ load_dotenv()
 # Replace with your bot's token
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 API_HOST = os.getenv('API_HOST')
+BOT_SECRET = os.getenv('BOT_SECRET')
 
 
 # Replace with the target user's name
@@ -51,32 +52,16 @@ def search_filename(filename):
     pattern = r'^memeId_(?P<memeId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})_visualId_(?P<visualId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})_toptextId_(?P<toptextId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})_bottomtextId_(?P<bottomtextId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}).png$'
 
     match = re.search(pattern, filename)
+    return match.group('memeId')
 
-    if match:
-        memeId = match.group('memeId')
-        visualId = match.group('visualId')
-        toptextId = match.group('toptextId')
-        bottomtextId = match.group('bottomtextId')
-
-    print("memeId:", memeId, "visualId:", visualId, "toptextId:", toptextId, "bottomtextId:", bottomtextId)
-    return (memeId, visualId, toptextId, bottomtextId)
-
-def log_reaction(message, reaction, user):
+async def log_reaction(message, reaction, user):
     """Helper function to log reaction details."""
     emoji = reaction.emoji
-    attachment_filename = message.attachments[0].filename
-
-    reaction_info = {
-        'timestamp': message.created_at.isoformat(),
-        'user_id': user.id,
-        'username': user.name,
-        'reaction': emoji,
-        'file_name': search_filename(attachment_filename)
-    }
-    if message.id not in reactions_data:
-        reactions_data[message.id] = []
-    reactions_data[message.id].append(reaction_info)
-    print(f'Reaction added: {reaction_info}')
+    memeId = search_filename(message.attachments[0].filename)
+    headers, data = prepare_vote_data(user, memeId, str(emoji)[0])
+    print(memeId)
+    print(data)
+    await post_vote(bot.get_channel(reaction.message.channel.id), headers, data, True)
 
 def react_to_message(message):
     for emoji in [f'{i}\N{COMBINING ENCLOSING KEYCAP}' for i in range(10)]:
@@ -105,7 +90,7 @@ async def on_ready():
                 for reaction in message.reactions:
                     async for user in reaction.users():
                         if should_log_reaction(message, user):
-                            log_reaction(message, reaction, user)
+                            await log_reaction(message, reaction, user)
     print(datetime.now())
     print("done looping")
     try:
@@ -123,7 +108,7 @@ async def on_message(message):
 async def on_reaction_add(reaction, user):
     message = reaction.message
     if should_log_reaction(message, user):
-        log_reaction(message, reaction, user)
+        await log_reaction(message, reaction, user)
 
 @bot.command(name='get_reactions')
 async def get_reactions(ctx, message_id: int):
@@ -240,34 +225,77 @@ async def create_memetext(interaction: discord.Interaction, text: str, position:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
-@bot.tree.command(name='post_vote', description='Vote on a votable(Meme, MemeVisual, MemeText)')
-@app_commands.describe(ElementId='The ID of the element to vote on.', VoteNumber='The number rating of the vote."')
-async def post_vote(interaction: discord.Interaction, ElementId: str, VoteNumber: int):
+@bot.tree.command(name='delete_visual', description='Delete a MemeVisual)')
+@app_commands.describe(id='The ID of the element to be deleted.')
+async def delete_visual(interaction: discord.Interaction, id: str):
     await interaction.response.defer()
-    if(VoteNumber < 0 or VoteNumber > 9):
-        return await interaction.followup.send("VoteNumber Invalid value: VoteNumber can only be an integer from 0-9.")
+    await delete_element(interaction, id, "visuals/")
 
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    
-    data = {
-        'ElementIDs': "[" + ElementId + "]",
-        'VoteNumber': VoteNumber,
-    }
-    
+@bot.tree.command(name='delete_text', description='Delete a MemeText)')
+@app_commands.describe(id='The ID of the element to be deleted.')
+async def delete_visual(interaction: discord.Interaction, id: str):
+    await interaction.response.defer()
+    await delete_element(interaction, id, "texts/")
+
+@bot.tree.command(name='delete_meme', description='Delete a Meme)')
+@app_commands.describe(id='The ID of the element to be deleted.')
+async def delete_visual(interaction: discord.Interaction, id: str):
+    await interaction.response.defer()
+    await delete_element(interaction, id, "memes/")
+
+async def delete_element(interaction, id, endpoint):
     try:
-        response = requests.post(API_HOST + "texts", headers=headers, json=data)
+        response = requests.delete(API_HOST + endpoint + id)
         response.raise_for_status()  # Raise an error for bad status codes
         
         # Send the result message
-        if response.status_code == 201:
-            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        if response.status_code == 204:
+            await interaction.followup.send("Element deleted successfully!")
         else:
-            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+            await interaction.followup.send("Failed to deleted element. Status code: " + str(response.status_code))
     except Exception as e:
         # Handle exceptions and ensure a response is sent
         await interaction.followup.send(f"An error occurred: {str(e)}")
+
+@bot.tree.command(name='vote', description='Vote on a votable(Meme, MemeVisual, MemeText)')
+@app_commands.describe(elementid='The ID of the element to vote on.', votenumber='The number rating of the vote."')
+async def vote(interaction: discord.Interaction, elementid: str, votenumber: int):
+    await interaction.response.defer()
+    if(votenumber < 0 or votenumber > 9):
+        return await interaction.followup.send("VoteNumber Invalid value: VoteNumber can only be an integer from 0-9.")
+
+    headers, data = prepare_vote_data(interaction.user, elementid, votenumber)
+    
+    await post_vote(interaction.followup, headers, data, True)
+
+async def post_vote(followup, headers, data, should_post_success):
+    try:
+        response = requests.post(API_HOST + "votes", headers=headers, data=data)
+        response.raise_for_status()  # Raise an error for bad status codes
+    
+        # Send the result message
+        if response.status_code == 201 or response.status_code == 200:
+            if should_post_success:
+                await followup.send("Vote successful!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await followup.send("Failed to vote. Status code: " + str(response.status_code))
+    except Exception as e:
+        # Handle exceptions and ensure a response is sent
+        await followup.send(f"An error occurred: {str(e)}")
+
+def prepare_vote_data(user, elementid, votenumber):
+    headers = {
+        'Bot_Secret': BOT_SECRET
+    }
+
+    data = {
+        'ElementIDs': [elementid],
+        'VoteNumber': votenumber,
+        'ExternalUserID': user.id,
+        'ExternalUserName': user.name,
+    }
+    
+    return headers,data
 
 
 @bot.tree.command(name="create_memevisual", description="Create a meme")
