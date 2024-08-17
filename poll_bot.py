@@ -36,7 +36,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Dictionary to store reactions with timestamps, user ID, and username
 reactions_data = {}
-
+async def defer_ephemeral(interaction):
+    await interaction.response.defer(ephemeral=True)
 
 def should_log_reaction(message, user):
     now = datetime.now(timezone.utc)
@@ -101,7 +102,7 @@ async def submit_meme(
     topics: str = None
 ):
     try:
-        await interaction.response.defer()
+        await defer_ephemeral(interaction)
 
         file_bytes = await visual_file.read()
         data = {
@@ -172,7 +173,7 @@ async def render_meme(
 @bot.tree.command(name='submit_memetext', description='Submit a meme text')
 @app_commands.describe(text='The content to submit a meme with', position='The position in a meme, can be "toptext" or "bottomtext"', topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
 async def submit_memetext(interaction: discord.Interaction, text: str, position: str, topics: str = None):
-    await interaction.response.defer()
+    await defer_ephemeral(interaction)
     if(position != "toptext" and position != "bottomtext"):
         await interaction.followup.send("Choose a position of either \"bottomtext\" or \"toptext\"")
         return
@@ -205,19 +206,19 @@ async def submit_memetext(interaction: discord.Interaction, text: str, position:
 @bot.tree.command(name='delete_visual', description='Delete a MemeVisual)')
 @app_commands.describe(id='The ID of the element to be deleted.')
 async def delete_visual(interaction: discord.Interaction, id: str):
-    await interaction.response.defer()
+    await defer_ephemeral(interaction)
     await delete_element(interaction, id, "visuals/")
 
 @bot.tree.command(name='delete_text', description='Delete a MemeText)')
 @app_commands.describe(id='The ID of the element to be deleted.')
 async def delete_text(interaction: discord.Interaction, id: str):
-    await interaction.response.defer()
+    await defer_ephemeral(interaction)
     await delete_element(interaction, id, "texts/")
 
 @bot.tree.command(name='delete_meme', description='Delete a Meme)')
 @app_commands.describe(id='The ID of the element to be deleted.')
 async def delete_meme(interaction: discord.Interaction, id: str):
-    await interaction.response.defer()
+    await defer_ephemeral(interaction)
     await delete_element(interaction, id, "memes/")
 
 async def delete_element(interaction, id, endpoint):
@@ -237,7 +238,7 @@ async def delete_element(interaction, id, endpoint):
 @bot.tree.command(name='vote', description='Vote on a votable(Meme, MemeVisual, MemeText)')
 @app_commands.describe(elementid='The ID of the element to vote on.', votenumber='The number rating of the vote."')
 async def vote(interaction: discord.Interaction, elementid: str, votenumber: int):
-    await interaction.response.defer()
+    await defer_ephemeral(interaction)
     if(votenumber < 0 or votenumber > 9):
         return await interaction.followup.send("VoteNumber Invalid value: VoteNumber can only be an integer from 0-9.")
 
@@ -279,7 +280,7 @@ async def submit_memevisual(
     topics: str = None
 ):
     try:
-        await interaction.response.defer()
+        await defer_ephemeral(interaction)
 
         file_bytes = await file.read()
         data = {
@@ -312,7 +313,7 @@ async def dubloons(
     interaction: discord.Interaction
 ):
     try:
-        await interaction.response.defer()
+        await defer_ephemeral(interaction)
         print(interaction.user.id)
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
         
