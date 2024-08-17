@@ -305,4 +305,23 @@ async def submit_memevisual(
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
+
+@bot.tree.command(name="dubloons", description="Get the sum of your dubloons")
+@app_commands.describe()
+async def dubloons(
+    interaction: discord.Interaction
+):
+    try:
+        await interaction.response.defer()
+        print(interaction.user.id)
+        response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
+        
+        if response.status_code == 200:
+            await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons!", ephemeral=True)
+        else:
+            await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
 bot.run(TOKEN)
