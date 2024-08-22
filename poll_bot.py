@@ -202,6 +202,66 @@ async def submit_memetext(interaction: discord.Interaction, text: str, position:
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
+@bot.tree.command(name='submit_bottomtext', description='Submit a bottomtext')
+@app_commands.describe(text='The content to submit', topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
+async def submit_memetext(interaction: discord.Interaction, text: str, topics: str = None):
+    await defer_ephemeral(interaction)
+    
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'text': text,
+        'position': True,
+    }
+    
+    if(topics is not None):
+        try:
+            data["Topics"] = json.loads(topics)
+        except Exception as e:
+            return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
+    
+    try:
+        response = requests.post(API_HOST + "texts", headers=headers, json=data)
+        
+        if response.status_code == 201:
+            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+
+@bot.tree.command(name='submit_toptext', description='Submit a meme toptext')
+@app_commands.describe(text='The content to submit', topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
+async def submit_toptext(interaction: discord.Interaction, text: str, topics: str = None):
+    await defer_ephemeral(interaction)
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'text': text,
+        'position': False,
+    }
+    
+    if(topics is not None):
+        try:
+            data["Topics"] = json.loads(topics)
+        except Exception as e:
+            return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
+    
+    try:
+        response = requests.post(API_HOST + "texts", headers=headers, json=data)
+        
+        if response.status_code == 201:
+            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
 
 @bot.tree.command(name='delete_visual', description='Delete a MemeVisual)')
 @app_commands.describe(id='The ID of the element to be deleted.')
