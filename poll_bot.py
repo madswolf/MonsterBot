@@ -35,8 +35,6 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Dictionary to store reactions with timestamps, user ID, and username
-reactions_data = {}
 async def defer_ephemeral(interaction):
     await interaction.response.defer(ephemeral=True)
 
@@ -395,5 +393,53 @@ async def dubloons(
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
+
+@bot.tree.command(name="git_blame", description="Annotate who owns the abomination")
+@app_commands.describe(meme_id="Id of the meme you want annotated")
+async def git_blame(
+    interaction: discord.Interaction,
+    meme_id: str
+):
+    try:
+        await defer_ephemeral(interaction)
+        response = requests.get(API_HOST + f"memes/{meme_id}")
+        
+        if response.status_code == 200:
+            await interaction.followup.send(f"These people are responsible for the abomination" + json.dumps(extract_owners(response.text)), ephemeral=True)
+        else:
+            await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+@bot.tree.context_menu(name='Git blame')
+async def git_blame_menu(interaction: discord.Interaction, message: discord.Message):
+    await defer_ephemeral(interaction)
+    
+    try:
+        if message.attachments:
+            meme_id = search_filename(message.attachments[0].filename)
+            response = requests.get(API_HOST + f"memes/{meme_id}")
+        
+            if response.status_code == 200:
+                await interaction.followup.send(f"These people are responsible for the abomination" + json.dumps(extract_owners(response.text)), ephemeral=True)
+            else:
+                await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+        else:
+            await interaction.response.send_message("No attachments found in the selected message.")
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+
+def extract_owners(meme):
+    meme = json.loads(meme)
+    owners = {}
+    owners["Visual"] = meme["memeVisual"]["owner"] or "No one" 
+    owners["Toptext"] = meme["toptext"]["owner"] or "No one"
+    owners["Bottomtext"] = meme["bottomText"]["owner"] or "No one"
+
+    return owners
 
 bot.run(TOKEN)
