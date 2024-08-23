@@ -19,6 +19,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 API_HOST = os.getenv('API_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
+IS_DEVELOPMENT = os.getenv('BOT_SECRET')
 
 
 # Replace with the target user's name
@@ -105,6 +106,11 @@ async def submit_meme(
         await defer_ephemeral(interaction)
 
         file_bytes = await visual_file.read()
+
+        headers = {
+            'ExternalUserId': str(interaction.user.id)
+        }
+
         data = {
             "TopText": top_text,
             "BottomText": bottom_text,
@@ -119,14 +125,17 @@ async def submit_meme(
         files = {
             "VisualFile": (visual_file.filename, file_bytes)
         }
-        
-        response = requests.post(API_HOST + "Memes?renderMeme=true", data=data, files=files)
+        url = API_HOST +  ("Memes?renderMeme=true" if not IS_DEVELOPMENT else "Memes")
+        response = requests.post(url, data=data, files=files, headers=headers)
         
         if response.status_code == 201:
-            file_bytes = io.BytesIO(base64.b64decode(response.json().get("renderedMeme")))
-            file_bytes.seek(0)  
+            if(not IS_DEVELOPMENT):
+                file_bytes = io.BytesIO(base64.b64decode(response.json().get("renderedMeme")))
+                file_bytes.seek(0)  
 
-            await interaction.followup.send(content="Meme submitted to the database successfully!", file=discord.File(fp=file_bytes, filename="renderedMeme.png"))
+                await interaction.followup.send(content="Meme submitted to the database successfully!", file=discord.File(fp=file_bytes, filename="renderedMeme.png"))
+            else:
+                await interaction.followup.send("Meme submitted to the database successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
         else:
             await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
 
@@ -146,6 +155,7 @@ async def render_meme(
         await interaction.response.defer()
 
         file_bytes = await visual_file.read()
+
         data = {
             "TopText": top_text,
             "BottomText": bottom_text,
@@ -179,7 +189,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, position:
         return
 
     headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'ExternalUserId': str(interaction.user.id)
     }
     data = {
         'text': text,
@@ -208,7 +219,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, topics: s
     await defer_ephemeral(interaction)
     
     headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'ExternalUserId': str(interaction.user.id)
     }
     data = {
         'text': text,
@@ -238,7 +250,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, topics: s
 async def submit_toptext(interaction: discord.Interaction, text: str, topics: str = None):
     await defer_ephemeral(interaction)
     headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'ExternalUserId': str(interaction.user.id)
     }
     data = {
         'text': text,
@@ -283,7 +296,6 @@ async def delete_meme(interaction: discord.Interaction, id: str):
 
 async def delete_element(interaction, id, endpoint):
     try:
-        print("user id:", interaction.user.id)
         if(interaction.user.id != 319532244463255552):
             return await interaction.followup.send("You are not allowed, need more dubloons")
         response = requests.delete(API_HOST + endpoint + id)
@@ -374,7 +386,6 @@ async def dubloons(
 ):
     try:
         await defer_ephemeral(interaction)
-        print(interaction.user.id)
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
         
         if response.status_code == 200:
