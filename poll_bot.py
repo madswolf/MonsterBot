@@ -353,6 +353,9 @@ async def submit_memevisual(
         await defer_ephemeral(interaction)
 
         file_bytes = await file.read()
+        headers = {
+            'ExternalUserId': str(interaction.user.id)
+        }
         data = {
         }
 
@@ -366,7 +369,7 @@ async def submit_memevisual(
             "File": (file.filename, file_bytes)
         }
         
-        response = requests.post(API_HOST + "Visuals", data=data, files=files)
+        response = requests.post(API_HOST + "Visuals", data=data, headers=headers, files=files)
         
         if response.status_code == 201:
             await interaction.followup.send("MemeVisual created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
