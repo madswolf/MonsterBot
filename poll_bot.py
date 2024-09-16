@@ -341,6 +341,38 @@ def prepare_vote_data(user, elementid, votenumber):
     
     return headers,data
 
+@bot.tree.command(name='transfer', description='Transfer dubloons from your account to another account')
+@app_commands.describe(dublooncount='The number of dubloons that you want to tranfer(whole positive number)', user='The name of the user that you want to transfer to.')
+async def vote(interaction: discord.Interaction, dublooncount: int, user: discord.user.User):
+    await defer_ephemeral(interaction)
+    if(dublooncount < 1):
+        return await interaction.followup.send("The amount of dubloons to transfer must a positive number")
+
+    if(interaction.user.id == user.id):
+        return await interaction.followup.send("You cannot transfer dubloons to yourself, please provide another user")
+    
+    headers = {
+        'Bot_Secret': BOT_SECRET,
+        'ExternalUserId': str(interaction.user.id)
+    }
+
+    data = {
+        "OtherUserId": user.id,
+        "OtherUserName": user.name,
+        "DubloonsToTransfer": dublooncount,
+    }
+    try:
+        response = requests.post(API_HOST + "users/Transfer", headers=headers, data=data)
+        if response.status_code == 200:
+            if(user.id == bot.user.id):
+                return await interaction.followup.send("Transfer successful! You have succesfully donated "+ str(dublooncount) + " to me... the bot")    
+            await interaction.followup.send("Transfer successful! You have transferred " + str(dublooncount) + " to " + user.name)
+        else:
+            await interaction.followup.send("Failed to transfer. Status code: " + str(response.status_code) + " message: " + str(response.text))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
 
 @bot.tree.command(name="submit_memevisual", description="Submit a meme")
 @app_commands.describe(file="Upload the image", topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
@@ -388,7 +420,7 @@ async def dubloons(
     try:
         await defer_ephemeral(interaction)
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
-        
+
         if response.status_code == 200:
             await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons!", ephemeral=True)
         else:
