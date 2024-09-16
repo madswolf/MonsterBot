@@ -438,7 +438,7 @@ async def git_blame(
     try:
         await defer_ephemeral(interaction)
         response = requests.get(API_HOST + f"memes/{meme_id}")
-        
+
         if response.status_code == 200:
             await interaction.followup.send(f"These people are responsible for the abomination" + json.dumps(extract_owners(response.text)), ephemeral=True)
         else:
@@ -456,7 +456,9 @@ async def git_blame_menu(interaction: discord.Interaction, message: discord.Mess
         if message.attachments:
             meme_id = search_filename(message.attachments[0].filename)
             response = requests.get(API_HOST + f"memes/{meme_id}")
-        
+            print(response)
+            print(response.status_code)
+            print(response.text)
             if response.status_code == 200:
                 await interaction.followup.send(f"These people are responsible for the abomination" + json.dumps(extract_owners(response.text)), ephemeral=True)
             else:
@@ -471,9 +473,20 @@ async def git_blame_menu(interaction: discord.Interaction, message: discord.Mess
 def extract_owners(meme):
     meme = json.loads(meme)
     owners = {}
-    owners["Visual"] = meme["memeVisual"]["owner"] or "No one" 
-    owners["Toptext"] = meme["toptext"]["owner"] or "No one"
-    owners["Bottomtext"] = meme["bottomText"]["owner"] or "No one"
+    
+    owner = meme["memeVisual"]["owner"] or "No one"
+    id = meme["memeVisual"]["id"]
+    owners["Visual"] = (id, owner)
+
+    if(meme["toptext"]):
+        owner = meme["toptext"]["owner"] or "No one"
+        id = meme["toptext"]["id"]
+        owners["Toptext"] = (id, owner)
+
+    if(meme["bottomText"]):
+        owner = meme["bottomText"]["owner"] or "No one"
+        id = meme["bottomText"]["id"]
+        owners["Bottomtext"] = (id, owner)
 
     return owners
 
