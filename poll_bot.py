@@ -21,7 +21,6 @@ API_HOST = os.getenv('API_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
 IS_DEVELOPMENT = os.getenv('BOT_SECRET')
 
-
 # Replace with the target user's name
 TARGET_USER = 'Hjerneskade(Meme Of The Day)'
 
@@ -440,7 +439,8 @@ async def git_blame(
         response = requests.get(API_HOST + f"memes/{meme_id}")
 
         if response.status_code == 200:
-            await interaction.followup.send(f"These people are responsible for the abomination" + json.dumps(extract_owners(response.text)), ephemeral=True)
+            message = f"These people are responsible for the abomination" + "```json\n" + format_json(json.dumps(extract_owners(response.text))) + "\n```"
+            await interaction.followup.send(message, ephemeral=True)
         else:
             await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
 
@@ -456,11 +456,10 @@ async def git_blame_menu(interaction: discord.Interaction, message: discord.Mess
         if message.attachments:
             meme_id = search_filename(message.attachments[0].filename)
             response = requests.get(API_HOST + f"memes/{meme_id}")
-            print(response)
-            print(response.status_code)
-            print(response.text)
             if response.status_code == 200:
-                await interaction.followup.send(f"These people are responsible for the abomination" + json.dumps(extract_owners(response.text)), ephemeral=True)
+                
+                message = f"These people are responsible for the abomination" + "```json\n" + format_json(json.dumps(extract_owners(response.text))) + "\n```"
+                await interaction.followup.send(message, ephemeral=True)
             else:
                 await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
         else:
@@ -474,19 +473,19 @@ def extract_owners(meme):
     meme = json.loads(meme)
     owners = {}
     
-    owner = meme["memeVisual"]["owner"] or "No one"
+    owner = meme["memeVisual"]["owner"]["userName"] if meme["memeVisual"]["owner"] else "No one"
     id = meme["memeVisual"]["id"]
-    owners["Visual"] = (id, owner)
+    owners["Visual"] = {"id":id, "owner":owner}
 
     if(meme["toptext"]):
-        owner = meme["toptext"]["owner"] or "No one"
+        owner = meme["toptext"]["owner"]["userName"] if meme["toptext"]["owner"] else "No one"
         id = meme["toptext"]["id"]
-        owners["Toptext"] = (id, owner)
+        owners["Toptext"] = {"id":id, "owner":owner}
 
     if(meme["bottomText"]):
-        owner = meme["bottomText"]["owner"] or "No one"
+        owner = meme["bottomText"]["owner"]["userName"] if meme["bottomText"]["owner"] else "No one"
         id = meme["bottomText"]["id"]
-        owners["Bottomtext"] = (id, owner)
+        owners["Bottomtext"] = {"id":id, "owner":owner}
 
     return owners
 
