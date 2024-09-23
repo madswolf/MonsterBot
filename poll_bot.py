@@ -1,8 +1,9 @@
+import math
 import discord
 from discord import app_commands
 from discord.ext import commands
 import requests
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageChops
 import io
 import os
 import time
@@ -20,6 +21,7 @@ TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 API_HOST = os.getenv('API_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
 IS_DEVELOPMENT = os.getenv('BOT_SECRET')
+CURRENT_PLACEID = os.getenv('CURRENT_PLACEID')
 
 # Replace with the target user's name
 TARGET_USER = 'Hjerneskade(Meme Of The Day)'
@@ -410,6 +412,72 @@ async def submit_memevisual(
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
+
+@bot.tree.command(name="submit_placesubmission", description="Submit a change to the current place(image)")
+@app_commands.describe(file="The changed image that you would like to submit")
+async def submit_placesubmission(
+    interaction: discord.Interaction,
+    file: discord.Attachment
+):
+    try:
+        await defer_ephemeral(interaction)
+
+        response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/submissions/latest")
+        if response.status_code != 200:
+            await interaction.followup.send(f"Failed to find Place with ID: {CURRENT_PLACEID} Status code: " + str(response.status_code))
+
+        submission_id = json.loads(response.text)["id"]
+        if (file.filename != f"{submission_id}.png"):
+            return await interaction.followup.send(f"You have either based your changes off an older version of the current place or you changed the name of the file. Please download the latest Place render and try again.")
+
+        response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/rendered")
+        reference_image = Image.open(io.BytesIO(response.content))
+
+        file_bytes = await file.read()
+        uploaded_image = Image.open(io.BytesIO(file_bytes))
+
+        diff_pixels = count_pixel_changes(uploaded_image, reference_image)
+        required_funds = math.ceil(diff_pixels/100.0)
+
+        response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
+        if response.status_code == 200:
+            user_dubloons = int(float(response.content.decode()))
+            if (user_dubloons < required_funds):
+                await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons, and you require {required_funds} dubloons to make this submission.", ephemeral=True)
+        else:
+            return await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+
+        headers = {
+            'ExternalUserId': str(interaction.user.id)
+        }
+        data = {
+            "PlaceId": CURRENT_PLACEID
+        }
+
+        files = {
+            "ImageWithChanges": (file.filename, file_bytes)
+        }
+
+        response = requests.post(API_HOST + f"MemePlaces/submissions/submit", data=data, headers=headers, files=files)
+        
+        if response.status_code == 200:
+            await interaction.followup.send("MemeVisual created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create MemeVisual. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+def count_pixel_changes(img1, img2):
+    img1 = img1.convert('RGBA')
+    img2 = img2.convert('RGBA')
+
+    diff = ImageChops.difference(img1, img2)
+
+    diff_pixels = sum(pixel != (0, 0, 0, 0) for pixel in diff.getdata())
+
+    return diff_pixels
 
 @bot.tree.command(name="dubloons", description="Get the sum of your dubloons")
 @app_commands.describe()
