@@ -13,6 +13,7 @@ from datetime import datetime, timezone, timedelta
 import re
 import json
 import base64
+from PIL.ExifTags import TAGS
 
 load_dotenv()
 
@@ -22,7 +23,7 @@ API_HOST = os.getenv('API_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
 IS_DEVELOPMENT = os.getenv('BOT_SECRET')
 CURRENT_PLACEID = os.getenv('CURRENT_PLACEID')
-
+MEDIA_HOST = os.getenv('MEDIA_HOST')
 # Replace with the target user's name
 TARGET_USER = 'Hjerneskade(Meme Of The Day)'
 
@@ -423,12 +424,20 @@ async def submit_placesubmission(
         await defer_ephemeral(interaction)
 
         response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/submissions/latest")
-        if response.status_code != 200:
-            await interaction.followup.send(f"Failed to find Place with ID: {CURRENT_PLACEID} Status code: " + str(response.status_code))
+        if response.status_code != 200 and response.status_code != 204:
+            return await interaction.followup.send(f"Failed to find Place with ID: {CURRENT_PLACEID} Status code: " + str(response.status_code))
+        
+        base_id = ""
+        if (response.status_code == 200):
+            base_id = json.loads(response.text)["id"]
+        elif (response.status_code == 204):
+            base_id = CURRENT_PLACEID        
+        else:
+            return interaction.followup.send(f"Latest place submission returned an error")
 
-        submission_id = json.loads(response.text)["id"]
-        if (file.filename != f"{submission_id}.png"):
-            return await interaction.followup.send(f"You have either based your changes off an older version of the current place or you changed the name of the file. Please download the latest Place render and try again.")
+        
+        if (file.filename != f"{base_id}.png"):
+            return await interaction.followup.send(f"You have either based your changes off an older version of the current place or changed the name of the file. Please download the latest Place render and try again.")
 
         response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/rendered")
         reference_image = Image.open(io.BytesIO(response.content))
@@ -461,9 +470,9 @@ async def submit_placesubmission(
         response = requests.post(API_HOST + f"MemePlaces/submissions/submit", data=data, headers=headers, files=files)
         
         if response.status_code == 200:
-            await interaction.followup.send("MemeVisual created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+            await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
         else:
-            await interaction.followup.send("Failed to create MemeVisual. Status code: " + str(response.status_code))
+            await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code))
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
@@ -478,6 +487,56 @@ def count_pixel_changes(img1, img2):
     diff_pixels = sum(pixel != (0, 0, 0, 0) for pixel in diff.getdata())
 
     return diff_pixels
+
+
+@bot.tree.command(name="render_place", description="Render the current place")
+@app_commands.describe()
+async def render_meme(
+    interaction: discord.Interaction,
+):
+    try:
+        await defer_ephemeral(interaction)
+
+        response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
+        print(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
+        print(response.status_code)
+        print(response.content)
+        if response.status_code == 200:
+            file_bytes = io.BytesIO(response.content)
+            file_bytes.seek(0)  
+
+            submission_Id = get_exif_comment(file_bytes)
+            file_bytes.seek(0)  
+            
+            if submission_Id == None:
+                return await interaction.followup.send(content="The latest submission could not be read, please contact the developer to fix the problem.")
+            await interaction.followup.send(content="Here is the newest version!", file=discord.File(fp=file_bytes, filename=f"{submission_Id}.png"))
+        else:
+            await interaction.followup.send("Failed to get the latest render of the place. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+def get_exif_comment(image_bytes):
+    image = Image.open(image_bytes)
+
+    exif_data = image._getexif()
+    if not exif_data:
+        return None
+
+    for tag_id, value in exif_data.items():
+        tag = TAGS.get(tag_id, tag_id)
+        if tag == 'UserComment':
+            if isinstance(value, bytes):
+                decoded_comment = value.decode('utf-8', errors='ignore')
+                if decoded_comment.startswith('UNICODE'):
+                    return decoded_comment.replace('UNICODE', '').strip()
+                return decoded_comment.strip()
+            else:
+                return str(value).strip()
+
+    return None
 
 @bot.tree.command(name="dubloons", description="Get the sum of your dubloons")
 @app_commands.describe()
