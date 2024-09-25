@@ -14,6 +14,7 @@ import re
 import json
 import base64
 from PIL.ExifTags import TAGS
+import difflib
 
 load_dotenv()
 
@@ -422,37 +423,37 @@ async def submit_placesubmission(
 ):
     try:
         await defer_ephemeral(interaction)
-
-        response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/submissions/latest")
-        if response.status_code != 200 and response.status_code != 204:
-            return await interaction.followup.send(f"Failed to find Place with ID: {CURRENT_PLACEID} Status code: " + str(response.status_code))
         
-        base_id = ""
-        if (response.status_code == 200):
-            base_id = json.loads(response.text)["id"]
-        elif (response.status_code == 204):
-            base_id = CURRENT_PLACEID        
-        else:
-            return interaction.followup.send(f"Latest place submission returned an error")
+        response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
+
+        if response.status_code != 200:
+            return await interaction.followup.send(f"Something went wrong in retrieving the current place. Please try again later.")
+
+        reference_image = io.BytesIO(response.content)
+        reference_image.seek(0)
+
+        reference_image_render_timestamp = get_exif_comment(reference_image)
+        reference_image.seek(0)
+
+        if reference_image_render_timestamp == None:
+                return await interaction.followup.send(content="The latest submission could not be read, please contact the developer to fix the problem.")
+        reference_image_render_timestamp = reference_image_render_timestamp.strip().replace('\x00', '')
 
         
-        if (file.filename != f"{base_id}.png"):
+        if (file.filename != f"{reference_image_render_timestamp}.png"):
             return await interaction.followup.send(f"You have either based your changes off an older version of the current place or changed the name of the file. Please download the latest Place render and try again.")
-
-        response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/rendered")
-        reference_image = Image.open(io.BytesIO(response.content))
 
         file_bytes = await file.read()
         uploaded_image = Image.open(io.BytesIO(file_bytes))
 
-        diff_pixels = count_pixel_changes(uploaded_image, reference_image)
+        diff_pixels = count_pixel_changes(uploaded_image, Image.open(reference_image))
         required_funds = math.ceil(diff_pixels/100.0)
 
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
         if response.status_code == 200:
             user_dubloons = int(float(response.content.decode()))
             if (user_dubloons < required_funds):
-                await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons, and you require {required_funds} dubloons to make this submission.", ephemeral=True)
+                return await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons, and you require {required_funds} dubloons to make this submission.", ephemeral=True)
         else:
             return await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
 
@@ -470,13 +471,12 @@ async def submit_placesubmission(
         response = requests.post(API_HOST + f"MemePlaces/submissions/submit", data=data, headers=headers, files=files)
         
         if response.status_code == 200:
-            await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+            return await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
         else:
-            await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code))
+            return await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code))
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
-
 
 def count_pixel_changes(img1, img2):
     img1 = img1.convert('RGBA')
@@ -489,28 +489,27 @@ def count_pixel_changes(img1, img2):
     return diff_pixels
 
 
-@bot.tree.command(name="render_place", description="Render the current place")
+@bot.tree.command(name="latest_place", description="Get the latest render of the place")
 @app_commands.describe()
-async def render_meme(
+async def latest_place(
     interaction: discord.Interaction,
 ):
     try:
         await defer_ephemeral(interaction)
-
-        response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
         print(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
-        print(response.status_code)
-        print(response.content)
+        response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
+
         if response.status_code == 200:
             file_bytes = io.BytesIO(response.content)
             file_bytes.seek(0)  
 
-            submission_Id = get_exif_comment(file_bytes)
-            file_bytes.seek(0)  
+            timestamp = get_exif_comment(file_bytes)
+            file_bytes.seek(0)
+            print(timestamp)  
             
-            if submission_Id == None:
+            if timestamp == None:
                 return await interaction.followup.send(content="The latest submission could not be read, please contact the developer to fix the problem.")
-            await interaction.followup.send(content="Here is the newest version!", file=discord.File(fp=file_bytes, filename=f"{submission_Id}.png"))
+            await interaction.followup.send(content="Here is the newest version!", file=discord.File(fp=file_bytes, filename=f"{timestamp}.png"))
         else:
             await interaction.followup.send("Failed to get the latest render of the place. Status code: " + str(response.status_code))
 
@@ -534,7 +533,7 @@ def get_exif_comment(image_bytes):
                     return decoded_comment.replace('UNICODE', '').strip()
                 return decoded_comment.strip()
             else:
-                return str(value).strip()
+                return str(value).strip().replace('\x00', '')
 
     return None
 
