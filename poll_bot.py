@@ -299,7 +299,10 @@ async def delete_element(interaction, id, endpoint):
     try:
         if(interaction.user.id != 319532244463255552):
             return await interaction.followup.send("You are not allowed, need more dubloons")
-        response = requests.delete(API_HOST + endpoint + id)
+        headers = {
+            'Bot_Secret': BOT_SECRET
+        }
+        response = requests.delete(API_HOST + endpoint + id, headers=headers)
         
         if response.status_code == 204:
             await interaction.followup.send("Element deleted successfully!")
@@ -488,6 +491,32 @@ def count_pixel_changes(img1, img2):
 
     return diff_pixels
 
+@bot.tree.command(name='delete_place_submission', description='Delete a place submission')
+@app_commands.describe(id='The ID of the element to be deleted.')
+async def delete_meme(interaction: discord.Interaction, id: str):
+    await defer_ephemeral(interaction)
+    await delete_element(interaction, id, "MemePlaces/submissions/")
+
+
+@bot.tree.command(name="rerender", description="Rerender the current place")
+@app_commands.describe()
+async def latest_place(
+    interaction: discord.Interaction,
+):
+    try:
+        await defer_ephemeral(interaction)
+        headers = {
+            'Bot_Secret': BOT_SECRET
+        }
+        response = requests.post(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/rerender", headers=headers)
+
+        if response.status_code == 200:
+            await interaction.followup.send(content="Place succesfully rerendered.")
+        else:
+            await interaction.followup.send(f"Failed to rerender image. Status code: {response.status_code}")
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="latest_place", description="Get the latest render of the place")
 @app_commands.describe()
