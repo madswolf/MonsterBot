@@ -416,7 +416,22 @@ async def submit_memevisual(
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
+class ConfirmView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60.0)
+        self.value = None
 
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        await interaction.response.defer()
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        await interaction.response.defer()
+        self.stop()
 
 @bot.tree.command(name="submit_placesubmission", description="Submit a change to the current place(image)")
 @app_commands.describe(file="The changed image that you would like to submit")
@@ -430,7 +445,7 @@ async def submit_placesubmission(
         response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
 
         if response.status_code != 200:
-            return await interaction.followup.send(f"Something went wrong in retrieving the current place. Please try again later.")
+            return await interaction.followup.send("Something went wrong in retrieving the current place. Please try again later.", ephemeral=True)
 
         reference_image = io.BytesIO(response.content)
         reference_image.seek(0)
@@ -438,48 +453,52 @@ async def submit_placesubmission(
         reference_image_render_timestamp = get_exif_comment(reference_image)
         reference_image.seek(0)
 
-        if reference_image_render_timestamp == None:
-                return await interaction.followup.send(content="The latest submission could not be read, please contact the developer to fix the problem.")
+        if reference_image_render_timestamp is None:
+            return await interaction.followup.send(content="The latest submission could not be read, please contact the developer to fix the problem.", ephemeral=True)
+
         reference_image_render_timestamp = reference_image_render_timestamp.strip().replace('\x00', '')
 
-        
-        if (file.filename != f"{reference_image_render_timestamp}.png"):
-            return await interaction.followup.send(f"You have either based your changes off an older version of the current place or changed the name of the file. Please download the latest Place render and try again.")
+        if file.filename != f"{reference_image_render_timestamp}.png":
+            return await interaction.followup.send(f"You have either based your changes off an older version of the current place or changed the name of the file. Please download the latest Place render and try again.", ephemeral=True)
 
         file_bytes = await file.read()
         uploaded_image = Image.open(io.BytesIO(file_bytes))
 
         diff_pixels = count_pixel_changes(uploaded_image, Image.open(reference_image))
-        required_funds = math.ceil(diff_pixels/100.0)
+        required_funds = math.ceil(diff_pixels / 100.0)
 
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
         if response.status_code == 200:
             user_dubloons = int(float(response.content.decode()))
-            if (user_dubloons < required_funds):
-                return await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons, and you require {required_funds} dubloons to make this submission.", ephemeral=True)
+            if user_dubloons < required_funds:
+                return await interaction.followup.send(f"You have {user_dubloons} dubloons, and you require {required_funds} dubloons to make this submission.", ephemeral=True)
         else:
-            return await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+            return await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code), ephemeral=True)
+        view = ConfirmView()
+        
+        await interaction.followup.send(f"This submission will cost {required_funds}. Are you sure you want to proceed?", view=view)
+        await view.wait()
 
-        headers = {
-            'ExternalUserId': str(interaction.user.id)
-        }
-        data = {
-            "PlaceId": CURRENT_PLACEID
-        }
-
-        files = {
-            "ImageWithChanges": (file.filename, file_bytes)
-        }
+        if view.value is None:
+            return await interaction.followup.send("No response, submission cancelled.", ephemeral=True)
+        elif view.value is False:
+            return await interaction.followup.send("Submission cancelled.", ephemeral=True)
+        else:
+            await interaction.followup.send("Proceeding with submission. Please wait.", ephemeral=True)
+        headers = {'ExternalUserId': str(interaction.user.id)}
+        data = {"PlaceId": CURRENT_PLACEID}
+        files = {"ImageWithChanges": (file.filename, file_bytes)}
 
         response = requests.post(API_HOST + f"MemePlaces/submissions/submit", data=data, headers=headers, files=files)
-        
+
         if response.status_code == 200:
-            return await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+            return await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "\njson\n" + format_json(response.text) + "\n", ephemeral=True)
         else:
-            return await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code))
+            return await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code), ephemeral=True)
 
     except Exception as e:
-        await interaction.followup.send(f"An error occurred: {str(e)}")
+        await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+
 
 def count_pixel_changes(img1, img2):
     img1 = img1.convert('RGBA')
@@ -525,7 +544,6 @@ async def latest_place(
 ):
     try:
         await defer_ephemeral(interaction)
-        print(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
         response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
 
         if response.status_code == 200:
@@ -534,7 +552,6 @@ async def latest_place(
 
             timestamp = get_exif_comment(file_bytes)
             file_bytes.seek(0)
-            print(timestamp)  
             
             if timestamp == None:
                 return await interaction.followup.send(content="The latest submission could not be read, please contact the developer to fix the problem.")
