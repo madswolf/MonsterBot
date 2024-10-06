@@ -41,13 +41,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def defer_ephemeral(interaction):
     await interaction.response.defer(ephemeral=True)
 
-def should_log_reaction(message, user):
-    now = datetime.now(timezone.utc)
-    message_age = now - message.created_at
-    return (message.author.name == TARGET_USER and 
-            message_age < timedelta(hours=72)
-            and user != bot.user)
-
 def should_react_to_message(message):
     return message.author.name == TARGET_USER
 
@@ -56,6 +49,16 @@ def search_filename(filename):
 
     match = re.search(pattern, filename)
     return match.group('memeId')
+
+def is_numeric_emoji(emoji):
+    return emoji in [f'{i}\N{COMBINING ENCLOSING KEYCAP}' for i in range(10)]
+
+def should_log_reaction(message, reaction, user):
+    now = datetime.now(timezone.utc)
+    message_age = now - message.created_at
+    return (message.author.name == TARGET_USER and 
+            message_age < timedelta(hours=72)
+            and user != bot.user and is_numeric_emoji(reaction.emoji))
 
 async def log_reaction(message, reaction, user):
     """Helper function to log reaction details."""
@@ -85,7 +88,7 @@ async def on_message(message):
 @bot.event
 async def on_reaction_add(reaction, user):
     message = reaction.message
-    if should_log_reaction(message, user):
+    if should_log_reaction(message, reaction, user):
         await log_reaction(message, reaction, user)
 
 def format_json(json_string):
@@ -464,8 +467,12 @@ async def submit_placesubmission(
         file_bytes = await file.read()
         uploaded_image = Image.open(io.BytesIO(file_bytes))
 
+        response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/currentprice")
+
+        current_price = float(json.loads(response.text)["pricePerPixel"])
+
         diff_pixels = count_pixel_changes(uploaded_image, Image.open(reference_image))
-        required_funds = math.ceil(diff_pixels / 100.0)
+        required_funds = math.ceil(diff_pixels * current_price)
 
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
         if response.status_code == 200:
@@ -492,7 +499,7 @@ async def submit_placesubmission(
         response = requests.post(API_HOST + f"MemePlaces/submissions/submit", data=data, headers=headers, files=files)
 
         if response.status_code == 200:
-            return await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "\njson\n" + format_json(response.text) + "\n", ephemeral=True)
+            return await interaction.followup.send("PlaceSubmission submitted successfully!\n" + "\n```json\n" + format_json(response.text) + "\n```", ephemeral=True)
         else:
             return await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code), ephemeral=True)
 
@@ -517,9 +524,55 @@ async def delete_meme(interaction: discord.Interaction, id: str):
     await delete_element(interaction, id, "MemePlaces/submissions/")
 
 
+@bot.tree.command(name="current_price_per_pixel", description="Get the current price per pixel for the current place")
+@app_commands.describe()
+async def current_price_per_pixel(
+    interaction: discord.Interaction,
+):
+    try:
+        await defer_ephemeral(interaction)
+
+        response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/currentprice")
+
+        if response.status_code == 200:
+            await interaction.followup.send("The current price is \n" + "```json\n" + format_json(response.text) + "\n```", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Failed to get the current price. Status code: {response.status_code}")
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+@bot.tree.command(name="change_price_per_pixel", description="Change the current price per pixel for the current place.")
+@app_commands.describe(new_price_per_pixel='The new price per pixel.')
+async def change_price_per_pixel(
+    interaction: discord.Interaction,
+    new_price_per_pixel: float
+):
+    try:
+        await defer_ephemeral(interaction)
+        headers = {
+            'Bot_Secret': BOT_SECRET
+        }
+        
+        data = {
+            'PlaceId': CURRENT_PLACEID,
+            'NewPricePerPixel': new_price_per_pixel,
+        }
+
+        response = requests.post(API_HOST + f"MemePlaces/ChangePrice", data=data, headers=headers)
+
+        if response.status_code == 200:
+            await interaction.followup.send("The current place's price per pixel successfully changed! The new price is \n" + "```json\n" + format_json(response.text) + "\n```", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Failed to change the current place's price per pixel. Status code: {response.status_code}")
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
 @bot.tree.command(name="rerender", description="Rerender the current place")
 @app_commands.describe()
-async def latest_place(
+async def rerender(
     interaction: discord.Interaction,
 ):
     try:
