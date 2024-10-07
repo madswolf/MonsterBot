@@ -551,6 +551,8 @@ async def change_price_per_pixel(
 ):
     try:
         await defer_ephemeral(interaction)
+        if(interaction.user.id != 319532244463255552):
+            return await interaction.followup.send("You are not allowed to change the price")
         headers = {
             'Bot_Secret': BOT_SECRET
         }
