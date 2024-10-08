@@ -445,6 +445,15 @@ async def submit_placesubmission(
     try:
         await defer_ephemeral(interaction)
         
+        file_bytes = await file.read()
+        if file.filename.endswith('.webp'):
+            uploaded_image = Image.open(io.BytesIO(file_bytes))
+            png_image_io = io.BytesIO()
+            uploaded_image.save(png_image_io, format="PNG")
+            png_image_io.seek(0)
+            file_bytes = png_image_io.getvalue()
+            file = discord.File(io.BytesIO(file_bytes), filename=file.filename.replace('.webp', '.png'))  # Overwrite file as PNG
+
         response = requests.get(MEDIA_HOST + f"places/{CURRENT_PLACEID}_latest.png")
 
         if response.status_code != 200:
@@ -464,7 +473,6 @@ async def submit_placesubmission(
         if file.filename != f"{reference_image_render_timestamp}.png":
             return await interaction.followup.send(f"You have either based your changes off an older version of the current place or changed the name of the file. Please download the latest Place render and try again.", ephemeral=True)
 
-        file_bytes = await file.read()
         uploaded_image = Image.open(io.BytesIO(file_bytes))
 
         response = requests.get(API_HOST + f"MemePlaces/{CURRENT_PLACEID}/currentprice")
@@ -472,6 +480,12 @@ async def submit_placesubmission(
         current_price = float(json.loads(response.text)["pricePerPixel"])
 
         diff_pixels = count_pixel_changes(uploaded_image, Image.open(reference_image))
+        if(diff_pixels == None):
+            return await interaction.followup.send(f"The image you have submitted is not the same resolution as the current place image. Please download the latest place and try again.", ephemeral=True)
+
+        if(diff_pixels == 0):
+                return await interaction.followup.send(f"The image you have submitted has no changes (pixel diff of 0). Please download the latest place and try again.", ephemeral=True)
+        
         required_funds = math.ceil(diff_pixels * current_price)
 
         response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
@@ -510,6 +524,11 @@ async def submit_placesubmission(
 def count_pixel_changes(img1, img2):
     img1 = img1.convert('RGBA')
     img2 = img2.convert('RGBA')
+    img1_height, img1_width = img1.size
+    img2_height, img2_width = img2.size
+
+    if(img1_height != img2_height or img1_width != img2_width):
+        return None
 
     diff = ImageChops.difference(img1, img2)
 
