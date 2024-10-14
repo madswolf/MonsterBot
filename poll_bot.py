@@ -660,14 +660,23 @@ def get_exif_comment(image_bytes):
 @bot.tree.command(name="dubloons", description="Get the sum of your dubloons")
 @app_commands.describe()
 async def dubloons(
-    interaction: discord.Interaction
+    interaction: discord.Interaction,
+      user: discord.user.User = None
 ):
     try:
         await defer_ephemeral(interaction)
-        response = requests.get(API_HOST + f"users/{interaction.user.id}/Dubloons")
+        user_id = interaction.user.id
+        if(user is not None):
+            user_id = user.id
+        response = requests.get(API_HOST + f"users/{user_id}/Dubloons")
 
         if response.status_code == 200:
-            await interaction.followup.send(f"You have {int(float(response.content.decode()))} dubloons!", ephemeral=True)
+            msg = f"You have {int(float(response.content.decode()))} dubloons!"
+            if(user is not None):
+                msg = f"{user.name} has {int(float(response.content.decode()))} dubloons!"
+            await interaction.followup.send(msg, ephemeral=True)
+        elif (response.status_code == 404):
+            await interaction.followup.send("Given user has no Dubloons")
         else:
             await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
 
