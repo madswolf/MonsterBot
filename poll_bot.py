@@ -24,6 +24,7 @@ API_HOST = os.getenv('API_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
 IS_DEVELOPMENT = os.getenv('BOT_SECRET')
 CURRENT_PLACEID = os.getenv('CURRENT_PLACEID')
+CURRENT_TOPICID = os.getenv('CURRENT_TOPICID')
 MEDIA_HOST = os.getenv('MEDIA_HOST')
 # Replace with the target user's name
 TARGET_USER = 'Hjerneskade(Meme Of The Day)'
@@ -278,34 +279,27 @@ async def submit_toptext(interaction: discord.Interaction, text: str, topics: st
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
-
-
-@bot.tree.command(name='delete_visual', description='Delete a MemeVisual)')
+@bot.tree.command(name='delete_votable', description='Delete a Votable (Meme, MemeVisual, MemeText)')
 @app_commands.describe(id='The ID of the element to be deleted.')
-async def delete_visual(interaction: discord.Interaction, id: str):
+@app_commands.describe(hard_delete='A boolean that determines if the element is deleted or removed from topic')
+async def delete_votable(interaction: discord.Interaction, id: str, hard_delete: bool = False):
     await defer_ephemeral(interaction)
-    await delete_element(interaction, id, "visuals/")
+    await delete_element(interaction, id, "topics/votables/", hard_delete)
 
-@bot.tree.command(name='delete_text', description='Delete a MemeText)')
-@app_commands.describe(id='The ID of the element to be deleted.')
-async def delete_text(interaction: discord.Interaction, id: str):
-    await defer_ephemeral(interaction)
-    await delete_element(interaction, id, "texts/")
-
-@bot.tree.command(name='delete_meme', description='Delete a Meme)')
-@app_commands.describe(id='The ID of the element to be deleted.')
-async def delete_meme(interaction: discord.Interaction, id: str):
-    await defer_ephemeral(interaction)
-    await delete_element(interaction, id, "memes/")
-
-async def delete_element(interaction, id, endpoint):
+async def delete_element(interaction, id, endpoint, hard_delete = False):
     try:
         if(interaction.user.id != 319532244463255552):
             return await interaction.followup.send("You are not allowed, need more dubloons")
         headers = {
-            'Bot_Secret': BOT_SECRET
+            'Bot_Secret': BOT_SECRET,
+            'ExternalUserId': str(interaction.user.id)
         }
-        response = requests.delete(API_HOST + endpoint + id, headers=headers)
+
+        params = {
+            'hardDelete': hard_delete
+        }
+
+        response = requests.delete(API_HOST + endpoint + id, headers=headers, params=params)
         
         if response.status_code == 204:
             await interaction.followup.send("Element deleted successfully!")
@@ -382,6 +376,31 @@ async def vote(interaction: discord.Interaction, dublooncount: int, user: discor
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
+@bot.tree.command(name="mod_user", description="Mod a given user")
+@app_commands.describe(user='The user that you want to mod.')
+async def current_price_per_pixel(
+    interaction: discord.Interaction,
+    user: discord.user.User
+):
+    try:
+        if(interaction.user.id != 319532244463255552):
+            return await interaction.followup.send("You are not allowed, need more dubloons")
+        await defer_ephemeral(interaction)
+
+        headers = {
+            'Bot_Secret': BOT_SECRET,
+            'ExternalUserId': str(interaction.user.id)
+        }
+
+        response = requests.put(API_HOST + f"topics/{CURRENT_TOPICID}/mod/{user.id}", headers=headers)
+
+        if response.status_code == 200:
+            await interaction.followup.send("The current price is \n" + "```json\n" + format_json(response.text) + "\n```", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Failed to get the current price. Status code: {response.status_code}")
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="submit_memevisual", description="Submit a meme")
 @app_commands.describe(file="Upload the image", topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
@@ -535,6 +554,7 @@ def count_pixel_changes(img1, img2):
     diff_pixels = sum(pixel != (0, 0, 0, 0) for pixel in diff.getdata())
 
     return diff_pixels
+
 
 @bot.tree.command(name='delete_place_submission', description='Delete a place submission')
 @app_commands.describe(id='The ID of the element to be deleted.')
