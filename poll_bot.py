@@ -288,8 +288,6 @@ async def delete_votable(interaction: discord.Interaction, id: str, hard_delete:
 
 async def delete_element(interaction, id, endpoint, hard_delete = False):
     try:
-        if(interaction.user.id != 319532244463255552):
-            return await interaction.followup.send("You are not allowed, need more dubloons")
         headers = {
             'Bot_Secret': BOT_SECRET,
             'ExternalUserId': str(interaction.user.id)
@@ -301,10 +299,10 @@ async def delete_element(interaction, id, endpoint, hard_delete = False):
 
         response = requests.delete(API_HOST + endpoint + id, headers=headers, params=params)
         
-        if response.status_code == 204:
+        if response.status_code == 200:
             await interaction.followup.send("Element deleted successfully!")
         else:
-            await interaction.followup.send("Failed to deleted element. Status code: " + str(response.status_code))
+            await interaction.followup.send("Failed to delete element. Status code: " + str(response.status_code))
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
@@ -395,9 +393,9 @@ async def current_price_per_pixel(
         response = requests.put(API_HOST + f"topics/{CURRENT_TOPICID}/mod/{user.id}", headers=headers)
 
         if response.status_code == 200:
-            await interaction.followup.send("The current price is \n" + "```json\n" + format_json(response.text) + "\n```", ephemeral=True)
+            await interaction.followup.send("The user was sucessfully modded", ephemeral=True)
         else:
-            await interaction.followup.send(f"Failed to get the current price. Status code: {response.status_code}")
+            await interaction.followup.send(f"Failed to mod user. Status code: {response.status_code}")
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
@@ -560,6 +558,9 @@ def count_pixel_changes(img1, img2):
 @app_commands.describe(id='The ID of the element to be deleted.')
 async def delete_meme(interaction: discord.Interaction, id: str):
     await defer_ephemeral(interaction)
+    if(interaction.user.id != 319532244463255552):
+        return await interaction.followup.send("You are not allowed, need more dubloons")
+    
     await delete_element(interaction, id, "MemePlaces/submissions/")
 
 
