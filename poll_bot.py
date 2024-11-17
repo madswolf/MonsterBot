@@ -15,6 +15,7 @@ import json
 import base64
 from PIL.ExifTags import TAGS
 import difflib
+from typing import Literal
 
 load_dotenv()
 
@@ -41,6 +42,9 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 async def defer_ephemeral(interaction):
     await interaction.response.defer(ephemeral=True)
+
+def is_Admin(interaction):
+    return interaction.user.id != 319532244463255552
 
 def should_react_to_message(message):
     return message.author.name == TARGET_USER
@@ -98,6 +102,101 @@ def format_json(json_string):
     except json.JSONDecodeError as e:
         return f"Error decoding JSON: {e}"
 
+async def render_meme(interaction, visual_bytes, filename, top_text = None, bottom_text = None):
+
+    data = {
+            "TopText": top_text,
+            "BottomText": bottom_text,
+            "FileName": filename,
+    }
+    files = {
+        "VisualFile": (filename, visual_bytes)
+    }
+    
+    response = requests.get(API_HOST + "Memes/Render", data=data, files=files)
+    
+    if response.status_code == 200:
+        file_bytes = io.BytesIO(response.content)
+        file_bytes.seek(0)  
+        return file_bytes
+    else:
+        await interaction.followup.send("Failed to render meme. Status code: " + str(response.status_code))
+        return None
+
+@bot.tree.command(name="top_votable", description="Get the top votable based on given arguments")
+@app_commands.describe(votable_type="The type of votable to fetch", start_date="The start date of the timespan in the format dd-mm-yyyy", end_date="The end date of the timespan in the format dd-mm-yyyy", topic='Name of the topic', take_count='The amout of items to display', order_ascending='Ordering')
+async def top_votable(
+    interaction: discord.Interaction,
+    votable_type: Literal["meme"],
+    start_date: str = None,
+    end_date: str = None,
+    topic: str = None,
+    take_count: int = 1,
+    order_ascending: bool = True
+):
+    try:
+        
+        await interaction.response.defer()
+        if(is_Admin(interaction)):
+            return await interaction.followup.send("You are not allowed, you are not cool enough.")
+        headers = {
+            'ExternalUserId': str(interaction.user.id)
+        }
+
+        parameters = {
+            "votableType": votable_type,
+            "takeCount": take_count,
+            "orderAscending": order_ascending
+        }
+
+        if start_date is not None:
+            parameters['startDate'] = start_date
+        
+        if end_date is not None:
+            parameters['endDate'] = end_date
+        
+        if topic is not None:
+            parameters['topic'] = topic
+
+
+        url = API_HOST + "topics/LeaderBoard"
+        response = requests.get(url, headers=headers, params=parameters)
+        
+        if response.status_code == 200:
+            message = f"{'Top' if not order_ascending else 'Bottom'} {take_count} {votable_type}s in the given timespan !"
+            #await interaction.followup.send(message + "\n" + "```json\n" + format_json(response.text) + "\n```")
+
+            response_json = json.loads(response.text)
+
+            #handle other votable types
+            for votable in response_json:
+                data = json.loads(votable['data'])
+                print(data)
+                visual_url = data['Visual']['data']
+
+                top_text = data['TopText']['data'] if data['TopText'] is not None else "" 
+                
+                bottom_text = data['BottomText']['data'] if data['BottomText'] is not None else "" 
+
+                response = requests.get(visual_url, stream=True)
+                response.raise_for_status()
+                visual_file = io.BytesIO(response.content)
+                file_name = f"{votable['id']}_{data['Visual']['id']}_{data['TopText']['id'] if data['TopText'] is not None else ''}_{data['BottomText']['id'] if data['BottomText'] is not None else ''}.png"
+                rendered_meme = await render_meme(interaction, visual_file, file_name, top_text, bottom_text)
+                vote_average = votable['voteAverage']
+                parsed_date = datetime.strptime(votable['createdAt'], "%Y-%m-%dT%H:%M:%S.%fZ")
+                message = f"Here is the next {votable_type} with a vote average of {vote_average:.2f} posted at {parsed_date.strftime('%d-%m')} !"
+                if take_count == 1:
+                    message = f"Here is the {'worst' if order_ascending else 'best'} {votable_type} with a vote average of {vote_average:.2f} posted at {parsed_date.strftime('%d-%m')} !"
+                
+                await interaction.followup.send(content=message, file=discord.File(fp=rendered_meme, filename=file_name)) 
+
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
 @bot.tree.command(name="submit_meme", description="Submit a meme")
 @app_commands.describe(visual_file="Upload the image", top_text="Top text of the meme (optional)", bottom_text="Bottom text of the meme (optional)", topics='Comma separated list of strings like so: ["Topic1","Topic2"]')
 async def submit_meme(
@@ -150,7 +249,7 @@ async def submit_meme(
 
 @bot.tree.command(name="render_meme", description="Render a meme without submitting it to the database")
 @app_commands.describe(visual_file="Upload the image", top_text="Top text of the meme (optional)", bottom_text="Bottom text of the meme (optional)")
-async def render_meme(
+async def render_meme_command(
     interaction: discord.Interaction,
     visual_file: discord.Attachment,
     top_text: str = None,
@@ -161,25 +260,10 @@ async def render_meme(
 
         file_bytes = await visual_file.read()
 
-        data = {
-            "TopText": top_text,
-            "BottomText": bottom_text,
-            "FileName": visual_file.filename,
-        }
-
-        files = {
-            "VisualFile": (visual_file.filename, file_bytes)
-        }
+        rendered_meme = await render_meme(interaction, file_bytes, visual_file.filename, top_text, bottom_text)
+        if rendered_meme is not None:
+             await interaction.followup.send(content="Here is the rendered meme!", file=discord.File(fp=rendered_meme, filename="renderedMeme.png"))    
         
-        response = requests.get(API_HOST + "Memes/Render", data=data, files=files)
-        
-        if response.status_code == 200:
-            file_bytes = io.BytesIO(response.content)
-            file_bytes.seek(0)  
-
-            await interaction.followup.send(content="Here is the rendered meme!", file=discord.File(fp=file_bytes, filename="renderedMeme.png"))
-        else:
-            await interaction.followup.send("Failed to render meme. Status code: " + str(response.status_code))
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
@@ -381,8 +465,8 @@ async def current_price_per_pixel(
     user: discord.user.User
 ):
     try:
-        if(interaction.user.id != 319532244463255552):
-            return await interaction.followup.send("You are not allowed, need more dubloons")
+        if(is_Admin(interaction)):
+            return await interaction.followup.send("You are not allowed, you are not cool enough.")
         await defer_ephemeral(interaction)
 
         headers = {
