@@ -1,18 +1,21 @@
 from PIL import Image, ImageDraw
 import imageio
 import random
-
+import time
+import io
+import numpy as np
+import concurrent.futures
 def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, font=None):
     """
     Extend a list of GIF frames with an animated confetti effect and static text.
 
     Parameters:
-        frames (list[Image.Image]): List of frames (`Pillow` Image objects) of the GIF.
+        frames (list[Image.Image]): List of frames (Pillow Image objects) of the GIF.
         extension_frames (int): Number of frames to add with the confetti effect.
         density (int): Number of confetti particles to generate per frame.
         top_text (str): Text to display at the top of the frame.
         bottom_text (str): Text to display at the bottom of the frame.
-        font (ImageFont.ImageFont, optional): Font for the text. Defaults to `None` (uses default font).
+        font (ImageFont.ImageFont, optional): Font for the text. Defaults to None (uses default font).
 
     Returns:
         list[Image.Image]: Extended list of frames with confetti animation and text.
@@ -25,9 +28,9 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_tex
     confetti = [
         {
             "x": width // 2,  # Start from the center
-            "y": height // 2,
-            "vx": random.uniform(-3, 3),  # Random horizontal velocity
-            "vy": random.uniform(-6, -3),  # Random upward velocity
+            "y": (height // 2)+(height * 0.4),
+            "vx": random.uniform(-6, 6),  # Random horizontal velocity
+            "vy": random.uniform(-10, -6),  # Random upward velocity
             "color": (
                 random.randint(0, 255), 
                 random.randint(0, 255), 
@@ -50,10 +53,8 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_tex
 
             # Wrap horizontally and reset vertically
             particle["x"] %= width
-            if particle["y"] > height:
-                particle["y"] = 0
-                particle["x"] = random.randint(0, width)
-                particle["vy"] = random.uniform(-6, -3)
+            particle["y"] %= height
+            
 
             # Draw the confetti particle
             draw.ellipse(
@@ -80,7 +81,6 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_tex
 def create_crate_unboxing_gif(
     thumbnails,
     target_index,
-    output_path,
     frame_size=(400, 200),
     spin_duration=2,
     fps=17,
@@ -152,8 +152,7 @@ def create_crate_unboxing_gif(
                     width=3,
                 )
 
-            if 0 <= img_x <= frame_size[0]:  # Only draw items visible on the frame
-                frame.paste(images[idx], (int(img_x), img_y))
+            frame.paste(images[idx], (int(img_x), img_y))
 
         # Add the needle
         needle_x = center_x - 5
@@ -167,28 +166,106 @@ def create_crate_unboxing_gif(
     for _ in range(fps):
         frames.append(frames[-1])
 
-    density = 1000  # Number of confetti particles
-    top_text = "WINNER!!!"  # Top text
-    bottom_text = "ROTTE"  # Bottom text
+    return frames
 
 
-    extension_frames = 300  # Number of frames with confetti
-    extended_frames = extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, None)
 
-    # Save as GIF
-    extended_frames[0].save(
-        output_path,
+def encode_frame_to_bytes(frame, duration):
+    """
+    Encode a single frame to a GIF-compatible byte stream.
+
+    Parameters:
+        frame (Image.Image): The frame to encode.
+        duration (int): Duration of the frame in milliseconds.
+
+    Returns:
+        bytes: Encoded frame as a byte stream.
+    """
+    frame_bytes = io.BytesIO()
+    frame.save(frame_bytes, format="GIF", duration=duration)
+    return frame_bytes.getvalue()
+
+
+def assemble_gif_from_encoded_frames(encoded_frames, duration=50):
+    """
+    Assemble a GIF from a list of pre-encoded frame byte streams.
+
+    Parameters:
+        encoded_frames (list[bytes]): List of byte streams for each frame.
+        duration (int): Duration for each frame in milliseconds.
+
+    Returns:
+        io.BytesIO: In-memory bytes object containing the GIF data.
+    """
+    gif_buffer = io.BytesIO()
+
+    # Load the first frame as the base
+    first_frame = Image.open(io.BytesIO(encoded_frames[0]))
+    rest_frames = [Image.open(io.BytesIO(f)) for f in encoded_frames[1:]]
+
+    # Save the GIF
+    first_frame.save(
+        gif_buffer,
+        format="GIF",
         save_all=True,
-        append_images=frames[1:],
-        duration=int(1000 / fps),
-        loop=0,  # Loop 0 times (no repetition)
+        append_images=rest_frames,
+        duration=duration,
+        loop=0,
+        optimize=False,
     )
 
+    gif_buffer.seek(0)  # Reset buffer position
+    return gif_buffer
 
-    print(f"GIF saved to {output_path}")
+
+def parallel_save_gif(frames, duration=50):
+    """
+    Save a sequence of frames as a GIF in parallel.
+
+    Parameters:
+        frames (list[Image.Image]): List of frames to save as a GIF.
+        duration (int): Duration for each frame in milliseconds.
+
+    Returns:
+        io.BytesIO: In-memory bytes object containing the GIF data.
+    """
+    # Encode frames in parallel
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        encoded_frames = list(
+            executor.map(encode_frame_to_bytes, frames, [duration] * len(frames))
+        )
+
+    # Assemble the final GIF from encoded frames
+    return assemble_gif_from_encoded_frames(encoded_frames, duration)
 
 
 # Example usage
-thumbnails = [ "1.jpg", "2.jpg", "3.jpg", "4.jpg"] * 19
-target_index = 1
-create_crate_unboxing_gif(thumbnails, target_index, "crate_unboxing.gif", spin_duration=6)
+thumbnails = ["1.jpg", "2.jpg", "3.jpg", "4.jpg"] * 19
+target_index = 3
+output_path = "crate_unboxing.gif"
+fps = 20
+
+start_time = time.time()
+frames = create_crate_unboxing_gif(thumbnails, target_index, spin_duration=5, fps=fps)
+print("--- %s seconds ---" % (time.time() - start_time))
+
+#density = 250
+#top_text = "WINNER!!!"
+#bottom_text = "ROTTE"
+#extension_frames = 5 * fps
+#start_time = time.time()
+#frames = extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, None)
+#print("--- %s seconds ---" % (time.time() - start_time))
+
+print(len(frames))
+
+# Save GIF to in-memory buffer
+start_time = time.time()
+gif_bytes = parallel_save_gif(frames, duration=int(1000 / fps))
+print("--- %s seconds to save GIF ---" % (time.time() - start_time))
+
+# Example: Write to file if needed
+output_path = "crate_unboxing.gif"
+with open(output_path, "wb") as f:
+    f.write(gif_bytes.getvalue())
+print(f"GIF saved to {output_path}")
