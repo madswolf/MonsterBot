@@ -2,13 +2,88 @@ from PIL import Image, ImageDraw
 import imageio
 import random
 
+def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, font=None):
+    """
+    Extend a list of GIF frames with an animated confetti effect and static text.
+
+    Parameters:
+        frames (list[Image.Image]): List of frames (`Pillow` Image objects) of the GIF.
+        extension_frames (int): Number of frames to add with the confetti effect.
+        density (int): Number of confetti particles to generate per frame.
+        top_text (str): Text to display at the top of the frame.
+        bottom_text (str): Text to display at the bottom of the frame.
+        font (ImageFont.ImageFont, optional): Font for the text. Defaults to `None` (uses default font).
+
+    Returns:
+        list[Image.Image]: Extended list of frames with confetti animation and text.
+    """
+    # Get the last frame and its size
+    last_frame = frames[-1]
+    width, height = last_frame.size
+
+    # Generate confetti particles
+    confetti = [
+        {
+            "x": width // 2,  # Start from the center
+            "y": height // 2,
+            "vx": random.uniform(-3, 3),  # Random horizontal velocity
+            "vy": random.uniform(-6, -3),  # Random upward velocity
+            "color": (
+                random.randint(0, 255), 
+                random.randint(0, 255), 
+                random.randint(0, 255),
+            ),
+        }
+        for _ in range(density)
+    ]
+
+    # Create additional frames with confetti animation
+    for _ in range(extension_frames):
+        confetti_frame = last_frame.copy()
+        draw = ImageDraw.Draw(confetti_frame)
+
+        # Update confetti positions and draw
+        for particle in confetti:
+            particle["x"] += particle["vx"]
+            particle["y"] += particle["vy"]
+            particle["vy"] += 0.3  # Gravity effect
+
+            # Wrap horizontally and reset vertically
+            particle["x"] %= width
+            if particle["y"] > height:
+                particle["y"] = 0
+                particle["x"] = random.randint(0, width)
+                particle["vy"] = random.uniform(-6, -3)
+
+            # Draw the confetti particle
+            draw.ellipse(
+                (particle["x"] - 2, particle["y"] - 2, particle["x"] + 2, particle["y"] + 2),
+                fill=particle["color"]
+            )
+
+        # Draw top and bottom text
+        if font is None:
+            # Use default font if none is provided
+            draw.text((width // 2, 10), top_text, fill="white", anchor="mm")
+            draw.text((width // 2, height - 30), bottom_text, fill="white", anchor="mm")
+        else:
+            text_width, text_height = draw.textsize(top_text, font=font)
+            draw.text(((width - text_width) // 2, 10), top_text, fill="white", font=font)
+            text_width, text_height = draw.textsize(bottom_text, font=font)
+            draw.text(((width - text_width) // 2, height - text_height - 10), bottom_text, fill="white", font=font)
+
+        # Append the frame
+        frames.append(confetti_frame)
+
+    return frames
+
 def create_crate_unboxing_gif(
     thumbnails,
     target_index,
     output_path,
     frame_size=(400, 200),
     spin_duration=2,
-    fps=30,
+    fps=17,
     initial_speed_modifier=1.0,
 ):
     """
@@ -92,14 +167,23 @@ def create_crate_unboxing_gif(
     for _ in range(fps):
         frames.append(frames[-1])
 
+    density = 1000  # Number of confetti particles
+    top_text = "WINNER!!!"  # Top text
+    bottom_text = "ROTTE"  # Bottom text
+
+
+    extension_frames = 300  # Number of frames with confetti
+    extended_frames = extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, None)
+
     # Save as GIF
-    frames[0].save(
+    extended_frames[0].save(
         output_path,
         save_all=True,
         append_images=frames[1:],
         duration=int(1000 / fps),
         loop=0,  # Loop 0 times (no repetition)
     )
+
 
     print(f"GIF saved to {output_path}")
 
