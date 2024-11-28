@@ -17,16 +17,20 @@ from PIL.ExifTags import TAGS
 import difflib
 from typing import Literal
 
+from gif import generate_gif
+
 load_dotenv()
 
 # Replace with your bot's token
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 API_HOST = os.getenv('API_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
-IS_DEVELOPMENT = os.getenv('BOT_SECRET')
+IS_DEVELOPMENT = os.getenv('IS_DEVELOPMENT')
 CURRENT_PLACEID = os.getenv('CURRENT_PLACEID')
 CURRENT_TOPICID = os.getenv('CURRENT_TOPICID')
 MEDIA_HOST = os.getenv('MEDIA_HOST')
+CURRENT_LOTTERY = os.getenv('CURRENT_LOTTERY')
+
 # Replace with the target user's name
 TARGET_USER = 'Hjerneskade(Meme Of The Day)'
 
@@ -263,6 +267,47 @@ async def render_meme_command(
         rendered_meme = await render_meme(interaction, file_bytes, visual_file.filename, top_text, bottom_text)
         if rendered_meme is not None:
              await interaction.followup.send(content="Here is the rendered meme!", file=discord.File(fp=rendered_meme, filename="renderedMeme.png"))    
+        
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+
+@bot.tree.command(name="buy_ticket", description="gif")
+@app_commands.describe()
+async def render_meme_command(
+    interaction: discord.Interaction
+):
+    try:
+        await interaction.response.defer()
+
+        headers = {
+            'Bot_Secret': BOT_SECRET,
+            'ExternalUserId': str(interaction.user.id)
+        }
+
+        try:
+            response = requests.post(API_HOST + f"Lotteries/{CURRENT_LOTTERY}", headers=headers)
+
+            if response.status_code == 201:
+                await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+            else:
+                await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+        except Exception as e:
+            await interaction.followup.send(f"An error occurred: {str(e)}")
+        # Example usage
+        thumbnails = [
+            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/1R64Adead_bird.jpg",
+            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/20200914_171910.jpg",
+            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/20240210_110812.jpg",
+            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/20884867_1917726818488974_351887955_n.png"
+        ]
+        target_index = 0
+        fps = 20
+
+        file_bytes = generate_gif(thumbnails, target_index, fps)
+
+        await interaction.followup.send(content="Here is the rendered meme!", file=discord.File(fp=file_bytes, filename="gif.gif"))    
         
 
     except Exception as e:
