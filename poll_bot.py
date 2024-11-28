@@ -273,9 +273,9 @@ async def render_meme_command(
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
-@bot.tree.command(name="buy_ticket", description="gif")
+@bot.tree.command(name="draw_ticket", description="gif")
 @app_commands.describe()
-async def render_meme_command(
+async def draw_ticket(
     interaction: discord.Interaction
 ):
     try:
@@ -286,32 +286,24 @@ async def render_meme_command(
             'ExternalUserId': str(interaction.user.id)
         }
 
-        try:
-            response = requests.post(API_HOST + f"Lotteries/{CURRENT_LOTTERY}", headers=headers)
+        response = requests.post(API_HOST + f"Lotteries/{CURRENT_LOTTERY}/DrawTicket", headers=headers)
+        if response.status_code == 200:
+            await interaction.followup.send("ticket drawn successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+            result = response.json()
+            thumbnails = result["items"]
+            thumbnails.append(result["winningItem"])
+            target_index = len(thumbnails) - 1
+            fps = 20
 
-            if response.status_code == 201:
-                await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
-            else:
-                await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
-        except Exception as e:
-            await interaction.followup.send(f"An error occurred: {str(e)}")
-        # Example usage
-        thumbnails = [
-            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/1R64Adead_bird.jpg",
-            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/20200914_171910.jpg",
-            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/20240210_110812.jpg",
-            "https://memeapi-file-server.fra1.digitaloceanspaces.com/visual/20884867_1917726818488974_351887955_n.png"
-        ]
-        target_index = 0
-        fps = 20
-
-        file_bytes = generate_gif(thumbnails, target_index, fps)
-
-        await interaction.followup.send(content="Here is the rendered meme!", file=discord.File(fp=file_bytes, filename="gif.gif"))    
-        
-
+            print(thumbnails,target_index)
+            file_bytes = generate_gif(thumbnails, target_index, fps)
+            await interaction.followup.send(content="", file=discord.File(fp=file_bytes, filename="gif.gif"))  
+        else:
+            await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
+                    
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
+
 
 
 @bot.tree.command(name='submit_memetext', description='Submit a meme text')
