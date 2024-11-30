@@ -5,9 +5,32 @@ import io
 import concurrent.futures
 import requests
 
-def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, font=None):
+def generate_similar_color(base_color, variation=150):
+    def clamp(value, min_value=0, max_value=255):
+        return max(min_value, min(value, max_value))
+
+    return tuple(
+        clamp(channel + random.randint(-variation, variation))
+        for channel in base_color
+    )
+
+def extend_gif_with_confetti_and_text(frames, extension_frames, top_text, bottom_text, rarity):
     last_frame = frames[-1]
     width, height = last_frame.size
+
+    if(rarity < 10):
+        base_color = (94, 42, 12) #poop
+    elif(rarity < 25):
+        base_color = (157, 157, 157) #poor
+    elif(rarity < 50):
+        base_color = (30, 255, 0) #uncommon
+    elif(rarity < 75):
+        base_color = (163, 53, 238) #epic
+    elif(rarity < 100):
+        base_color = (230, 204, 128) #gold
+
+    
+    density = 15 * rarity
 
     confetti = [
         {
@@ -15,11 +38,7 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_tex
             "y": (height // 2)+(height * 0.4),
             "vx": random.uniform(-6, 6),
             "vy": random.uniform(-10, -6),
-            "color": (
-                random.randint(0, 255), 
-                random.randint(0, 255), 
-                random.randint(0, 255),
-            ),
+            "color": generate_similar_color(base_color),
         }
         for _ in range(density)
     ]
@@ -42,15 +61,9 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, density, top_tex
                 fill=particle["color"]
             )
 
-        if font is None:
-            draw.text((width // 2, 10), top_text, fill="white", anchor="mm")
-            draw.text((width // 2, height - 30), bottom_text, fill="white", anchor="mm")
-        else:
-            text_width, text_height = draw.textsize(top_text, font=font)
-            draw.text(((width - text_width) // 2, 10), top_text, fill="white", font=font)
-            text_width, text_height = draw.textsize(bottom_text, font=font)
-            draw.text(((width - text_width) // 2, height - text_height - 10), bottom_text, fill="white", font=font)
-
+        
+        draw.text((width // 2, 10), top_text, fill="white", anchor="mm")
+        draw.text((width // 2, height - 30), bottom_text, fill="white", anchor="mm")
         frames.append(confetti_frame)
 
     return frames
@@ -189,7 +202,7 @@ def parallel_save_gif(frames, duration=50):
 
 
 
-def generate_gif(thumbnails, target_index, fps):
+def generate_gif(thumbnails, win_text, win_rarity, target_index, fps):
     start_time = time.time()
     preprocessed_thumbnails = preprocess_thumbnails_from_urls(thumbnails, thumbnail_size=(100, 100), reduce_colors=True)
     print("--- %s seconds to preprocess thumbnails ---" % (time.time() - start_time))
@@ -199,12 +212,11 @@ def generate_gif(thumbnails, target_index, fps):
     frames = create_crate_unboxing_gif(preprocessed_thumbnails * 16, target_index, spin_duration=5, fps=fps)
     print("--- %s seconds ---" % (time.time() - start_time))
 
-    density = 150
     top_text = "WINNER!!!"
-    bottom_text = "ROTTE"
+    bottom_text = win_text
     extension_frames = 5 * fps
     start_time = time.time()
-    frames = extend_gif_with_confetti_and_text(frames, extension_frames, density, top_text, bottom_text, None)
+    frames = extend_gif_with_confetti_and_text(frames, extension_frames, top_text, bottom_text, win_rarity)
     print("--- %s seconds ---" % (time.time() - start_time))
 
     print(len(frames))

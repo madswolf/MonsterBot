@@ -292,11 +292,13 @@ async def draw_ticket(
             result = response.json()
             thumbnails = result["items"]
             thumbnails.append(result["winningItem"])
+            winning_item_name = result["winningItemName"]
+            winning_rarity = int(result["winningRarity"])
             target_index = len(thumbnails) - 1
             fps = 20
 
             print(thumbnails,target_index)
-            file_bytes = generate_gif(thumbnails, target_index, fps)
+            file_bytes = generate_gif(thumbnails, winning_item_name, winning_rarity, target_index, fps)
             await interaction.followup.send(content="", file=discord.File(fp=file_bytes, filename="gif.gif"))  
         else:
             await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
@@ -821,6 +823,26 @@ async def dubloons(
             await interaction.followup.send("Given user has no Dubloons")
         else:
             await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+@bot.tree.command(name="lottery_receipt", description="Get the receipt of all tickets you've baught for the current lottery")
+@app_commands.describe()
+async def dubloons(
+    interaction: discord.Interaction
+):
+    try:
+        await defer_ephemeral(interaction)
+        headers = {'ExternalUserId': str(interaction.user.id)}
+        response = requests.get(API_HOST + f"Lotteries/{CURRENT_LOTTERY}/receipt", headers=headers)
+
+        if response.status_code == 200:
+            await interaction.followup.send("Your receipt \n" + "```json\n" + format_json(response.text) + "\n```", ephemeral=True)
+        elif response.status_code == 404:
+            await interaction.followup.send("Lottery or user not found", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Failed to change the current place's price per pixel. Status code: {response.status_code}")
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
