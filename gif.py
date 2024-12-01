@@ -20,17 +20,19 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, top_text, bottom
 
     if(rarity < 10):
         base_color = (94, 42, 12) #poop
-    elif(rarity < 25):
-        base_color = (157, 157, 157) #poor
     elif(rarity < 50):
+        base_color = (157, 157, 157) #poor
+    elif(rarity < 83):
         base_color = (30, 255, 0) #uncommon
-    elif(rarity < 75):
+    elif(rarity < 91):
+        base_color = (0, 112, 221), #rare
+    elif(rarity < 97):
         base_color = (163, 53, 238) #epic
     elif(rarity < 100):
         base_color = (230, 204, 128) #gold
 
     
-    density = 15 * rarity
+    density = (15 * rarity) + 5
 
     confetti = [
         {

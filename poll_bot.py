@@ -288,7 +288,7 @@ async def draw_ticket(
 
         response = requests.post(API_HOST + f"Lotteries/{CURRENT_LOTTERY}/DrawTicket", headers=headers)
         if response.status_code == 200:
-            await interaction.followup.send("ticket drawn successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+            #await interaction.followup.send("ticket drawn successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
             result = response.json()
             thumbnails = result["items"]
             thumbnails.append(result["winningItem"])
