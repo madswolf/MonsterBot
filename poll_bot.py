@@ -279,7 +279,7 @@ async def draw_ticket(
     interaction: discord.Interaction
 ):
     try:
-        await interaction.response.defer()
+        await defer_ephemeral(interaction)
 
         headers = {
             'Bot_Secret': BOT_SECRET,
@@ -294,12 +294,13 @@ async def draw_ticket(
             thumbnails.append(result["winningItem"])
             winning_item_name = result["winningItemName"]
             winning_rarity = int(result["winningRarity"])
+            wasFree = bool(result["wasFree"])
             target_index = len(thumbnails) - 1
             fps = 20
 
             print(thumbnails,target_index)
             file_bytes = generate_gif(thumbnails, winning_item_name, winning_rarity, target_index, fps)
-            await interaction.followup.send(content="", file=discord.File(fp=file_bytes, filename="gif.gif"))  
+            await interaction.followup.send(content="FREE SPIN !!!" if wasFree else "", file=discord.File(fp=file_bytes, filename="gif.gif"), ephemeral=True)  
         else:
             await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
                     
@@ -830,15 +831,18 @@ async def dubloons(
 @bot.tree.command(name="lottery_receipt", description="Get the receipt of all tickets you've baught for the current lottery")
 @app_commands.describe()
 async def dubloons(
-    interaction: discord.Interaction
+    interaction: discord.Interaction,
+    user: discord.user.User = None
 ):
     try:
         await defer_ephemeral(interaction)
-        headers = {'ExternalUserId': str(interaction.user.id)}
+        headers = {'ExternalUserId': str(user.id if user != None else interaction.user.id)}
         response = requests.get(API_HOST + f"Lotteries/{CURRENT_LOTTERY}/receipt", headers=headers)
 
         if response.status_code == 200:
-            await interaction.followup.send("Your receipt \n" + "```json\n" + format_json(response.text) + "\n```", ephemeral=True)
+            message = "Your receipt \n" + "```json\n" + format_json(response.text) + "\n```"
+            await send_message_or_file(interaction, message)
+            
         elif response.status_code == 404:
             await interaction.followup.send("Lottery or user not found", ephemeral=True)
         else:
@@ -886,7 +890,13 @@ async def git_blame_menu(interaction: discord.Interaction, message: discord.Mess
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
-
+async def send_message_or_file(interaction, message):
+    if len(message) <= 2000:
+        await interaction.followup.send(message)
+    else:
+        in_memory_file = io.StringIO(message)
+        in_memory_file.seek(0)
+        await interaction.followup.send(content="Here is your receipt!", file=discord.File(fp=in_memory_file, filename="receipt.txt"))
 
 def extract_owners(meme):
     meme = json.loads(meme)
