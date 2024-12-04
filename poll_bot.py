@@ -279,7 +279,7 @@ async def draw_ticket(
     interaction: discord.Interaction
 ):
     try:
-        await defer_ephemeral(interaction)
+        await interaction.response.defer()
 
         headers = {
             'Bot_Secret': BOT_SECRET,
@@ -300,7 +300,9 @@ async def draw_ticket(
 
             print(thumbnails,target_index)
             file_bytes = generate_gif(thumbnails, winning_item_name, winning_rarity, target_index, fps)
-            await interaction.followup.send(content="FREE SPIN !!!" if wasFree else "", file=discord.File(fp=file_bytes, filename="gif.gif"), ephemeral=True)  
+            await interaction.followup.send(content="FREE SPIN !!!" if wasFree else "", file=discord.File(fp=file_bytes, filename="gif.gif"))  
+        elif response.status_code == 400:
+            await interaction.followup.send("Not enough dubloons.")
         else:
             await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
                     
@@ -865,7 +867,7 @@ async def git_blame(
             message = f"These people are responsible for the abomination" + "```json\n" + format_json(json.dumps(extract_owners(response.text))) + "\n```"
             await interaction.followup.send(message, ephemeral=True)
         else:
-            await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
+            await interaction.followup.send("Failed to fetch the people responsible for the abomination. Status code: " + str(response.status_code))
 
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
