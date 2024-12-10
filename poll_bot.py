@@ -1,4 +1,5 @@
 import math
+import traceback
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -175,7 +176,6 @@ async def top_votable(
             #handle other votable types
             for votable in response_json:
                 data = json.loads(votable['data'])
-                print(data)
                 visual_url = data['Visual']['data']
 
                 top_text = data['TopText']['data'] if data['TopText'] is not None else "" 
@@ -298,7 +298,6 @@ async def draw_ticket(
             target_index = len(thumbnails) - 1
             fps = 20
 
-            print(thumbnails,target_index)
             file_bytes = generate_gif(thumbnails, winning_item_name, winning_rarity, target_index, fps)
             await interaction.followup.send(content="FREE SPIN !!!" if wasFree else "", file=discord.File(fp=file_bytes, filename="gif.gif"))  
         elif response.status_code == 400:
@@ -307,6 +306,8 @@ async def draw_ticket(
             await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
                     
     except Exception as e:
+        print(e.__traceback__)
+        print(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
