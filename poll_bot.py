@@ -4,11 +4,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import requests
+import PIL
 from PIL import Image, ImageChops
+import logging
 import io
 import os
 import time
 import imageio
+import dotenv
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
 import re
@@ -17,8 +20,16 @@ import base64
 from PIL.ExifTags import TAGS
 import difflib
 from typing import Literal
+import pkg_resources
 
 from gif import generate_gif
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -83,12 +94,19 @@ def react_to_message(message):
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
+    logger.info(f'Logged in as {bot.user}')
+    logger.info(f'lol {API_HOST}')
+    logger.info(f"discord.py version: {pkg_resources.get_distribution('discord.py').version}")
+    logger.info(f"requests version: {pkg_resources.get_distribution('requests').version}")
+    logger.info(f"Pillow (PIL) version: {pkg_resources.get_distribution('Pillow').version}")
+    logger.info(f"imageio version: {pkg_resources.get_distribution('imageio').version}")
+    logger.info(f"python-dotenv version: {pkg_resources.get_distribution('python-dotenv').version}")
+    logger.info(f'Logged in as {bot.user}')
     try:
         synced = await bot.tree.sync()
-        print(f'Synced {len(synced)} commands.')
+        logger.info(f'Synced {len(synced)} commands.')
     except Exception as e:
-        print(f'Error syncing commands: {e}')
+        logger.info(f'Error syncing commands: {e}')
 
 @bot.event
 async def on_message(message):
@@ -306,8 +324,8 @@ async def draw_ticket(
             await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
                     
     except Exception as e:
-        print(e.__traceback__)
-        print(traceback.format_exc())
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
@@ -333,6 +351,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, position:
         try:
             data["Topics"] = json.loads(topics)
         except Exception as e:
+            logger.info(e.__traceback__)
+            logger.info(traceback.format_exc())
             return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
     
     try:
@@ -343,6 +363,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, position:
         else:
             await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name='submit_bottomtext', description='Submit a bottomtext')
@@ -363,6 +385,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, topics: s
         try:
             data["Topics"] = json.loads(topics)
         except Exception as e:
+            logger.info(e.__traceback__)
+            logger.info(traceback.format_exc())
             return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
     
     try:
@@ -373,6 +397,8 @@ async def submit_memetext(interaction: discord.Interaction, text: str, topics: s
         else:
             await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
@@ -394,6 +420,8 @@ async def submit_toptext(interaction: discord.Interaction, text: str, topics: st
         try:
             data["Topics"] = json.loads(topics)
         except Exception as e:
+            logger.info(e.__traceback__)
+            logger.info(traceback.format_exc())
             return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
     
     try:
@@ -404,6 +432,8 @@ async def submit_toptext(interaction: discord.Interaction, text: str, topics: st
         else:
             await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name='delete_votable', description='Delete a Votable (Meme, MemeVisual, MemeText)')
@@ -431,6 +461,8 @@ async def delete_element(interaction, id, endpoint, hard_delete = False):
         else:
             await interaction.followup.send("Failed to delete element. Status code: " + str(response.status_code))
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name='vote', description='Vote on a votable(Meme, MemeVisual, MemeText)')
@@ -454,6 +486,8 @@ async def post_vote(followup, headers, data, should_post_success):
         else:
             await followup.send("Failed to vote. Status code: " + str(response.status_code))
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await followup.send(f"An error occurred: {str(e)}")
 
 def prepare_vote_data(user, elementid, votenumber):
@@ -499,6 +533,8 @@ async def vote(interaction: discord.Interaction, dublooncount: int, user: discor
             await interaction.followup.send("Failed to transfer. Status code: " + str(response.status_code) + " message: " + str(response.text))
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="mod_user", description="Mod a given user")
@@ -525,6 +561,8 @@ async def current_price_per_pixel(
             await interaction.followup.send(f"Failed to mod user. Status code: {response.status_code}")
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="submit_memevisual", description="Submit a meme")
@@ -548,6 +586,8 @@ async def submit_memevisual(
             try:
                 data["Topics"] = json.loads(topics)
             except Exception as e:
+                logger.info(e.__traceback__)
+                logger.info(traceback.format_exc())
                 return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
 
         files = {
@@ -562,6 +602,8 @@ async def submit_memevisual(
             await interaction.followup.send("Failed to create MemeVisual. Status code: " + str(response.status_code))
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 class ConfirmView(discord.ui.View):
     def __init__(self):
@@ -662,6 +704,8 @@ async def submit_placesubmission(
             return await interaction.followup.send("Failed to submit PlaceSubmission. Status code: " + str(response.status_code), ephemeral=True)
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 
 
@@ -707,6 +751,8 @@ async def current_price_per_pixel(
             await interaction.followup.send(f"Failed to get the current price. Status code: {response.status_code}")
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
@@ -737,6 +783,8 @@ async def change_price_per_pixel(
             await interaction.followup.send(f"Failed to change the current place's price per pixel. Status code: {response.status_code}")
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="rerender", description="Rerender the current place")
@@ -757,6 +805,8 @@ async def rerender(
             await interaction.followup.send(f"Failed to rerender image. Status code: {response.status_code}")
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="latest_place", description="Get the latest render of the place")
@@ -782,6 +832,8 @@ async def latest_place(
             await interaction.followup.send("Failed to get the latest render of the place. Status code: " + str(response.status_code))
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
@@ -829,6 +881,8 @@ async def dubloons(
             await interaction.followup.send("Failed to fetch dubloons. Status code: " + str(response.status_code))
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="lottery_receipt", description="Get the receipt of all tickets you've baught for the current lottery")
@@ -852,6 +906,8 @@ async def dubloons(
             await interaction.followup.send(f"Failed to change the current place's price per pixel. Status code: {response.status_code}")
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 @bot.tree.command(name="git_blame", description="Annotate who owns the abomination")
@@ -871,6 +927,8 @@ async def git_blame(
             await interaction.followup.send("Failed to fetch the people responsible for the abomination. Status code: " + str(response.status_code))
 
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 
@@ -891,6 +949,8 @@ async def git_blame_menu(interaction: discord.Interaction, message: discord.Mess
         else:
             await interaction.response.send_message("No attachments found in the selected message.")
     except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
 async def send_message_or_file(interaction, message):
