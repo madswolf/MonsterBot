@@ -25,7 +25,7 @@ def extend_gif_with_confetti_and_text(frames, extension_frames, top_text, bottom
     elif(rarity < 83):
         base_color = (30, 255, 0) #uncommon
     elif(rarity < 91):
-        base_color = (0, 112, 221), #rare
+        base_color = (0, 112, 221) #rare
     elif(rarity < 97):
         base_color = (163, 53, 238) #epic
     elif(rarity < 100):
