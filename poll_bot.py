@@ -320,6 +320,8 @@ async def draw_ticket(
             await interaction.followup.send(content="FREE SPIN !!!" if wasFree else "", file=discord.File(fp=file_bytes, filename="gif.gif"))  
         elif response.status_code == 400:
             await interaction.followup.send("Not enough dubloons.")
+        elif response.status_code == 409:
+            await interaction.followup.send("Lottery closed.")
         else:
             await interaction.followup.send("Failed to draw ticket. Status code: " + str(response.status_code))
                     
