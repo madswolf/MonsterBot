@@ -63,7 +63,7 @@ def is_Admin(interaction):
     return interaction.user.id != 319532244463255552
 
 def should_react_to_message(message):
-    return message.author.name == TARGET_USER
+    return message.author.name == TARGET_USER and message.attachments[0].filename.startswith("memeId")
 
 def search_filename(filename):
     pattern = r'^memeId_(?P<memeId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})_visualId_(?P<visualId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})_toptextId_(?P<toptextId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})_bottomtextId_(?P<bottomtextId>[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}).png$'
