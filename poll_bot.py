@@ -21,6 +21,7 @@ from PIL.ExifTags import TAGS
 import difflib
 from typing import Literal
 import pkg_resources
+import filetype
 
 from gif import generate_gif
 
@@ -101,6 +102,7 @@ async def on_ready():
     logger.info(f"Pillow (PIL) version: {pkg_resources.get_distribution('Pillow').version}")
     logger.info(f"imageio version: {pkg_resources.get_distribution('imageio').version}")
     logger.info(f"python-dotenv version: {pkg_resources.get_distribution('python-dotenv').version}")
+    logger.info(f"filetype: {pkg_resources.get_distribution('filetype').version}")
     logger.info(f'Logged in as {bot.user}')
     try:
         synced = await bot.tree.sync()
@@ -232,7 +234,9 @@ async def submit_meme(
         await defer_ephemeral(interaction)
 
         file_bytes = await visual_file.read()
-
+        if(not is_image(file_bytes)):
+            return await interaction.followup.send(f"The given file is not an image. Please try again with a different file")
+        
         headers = {
             'ExternalUserId': str(interaction.user.id)
         }
@@ -578,6 +582,9 @@ async def submit_memevisual(
         await defer_ephemeral(interaction)
 
         file_bytes = await file.read()
+        if(not is_image(file_bytes)):
+            return await interaction.followup.send(f"The given file is not an image. Please try again with a different file")
+        
         headers = {
             'ExternalUserId': str(interaction.user.id)
         }
@@ -954,6 +961,10 @@ async def git_blame_menu(interaction: discord.Interaction, message: discord.Mess
         logger.info(e.__traceback__)
         logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
+
+def is_image(file_bytes: bytes) -> bool:
+    kind = filetype.guess(file_bytes)
+    return kind is not None and kind.mime.startswith('image/')
 
 async def send_message_or_file(interaction, message):
     if len(message) <= 2000:

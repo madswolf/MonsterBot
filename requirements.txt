@@ -3,3 +3,4 @@ requests==2.32.3
 Pillow==10.4.0
 imageio==2.35.1
 python-dotenv==1.0.1
+filetype==1.2.0
