@@ -22,6 +22,7 @@ import difflib
 from typing import Literal
 import pkg_resources
 import filetype
+import urllib.parse
 
 from gif import generate_gif
 
@@ -272,6 +273,35 @@ async def submit_meme(
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
+
+@bot.tree.command(name="random_meme", description="A random rendered meme")
+@app_commands.describe()
+async def render_meme_command(
+    interaction: discord.Interaction
+):
+    await interaction.response.defer()
+    print(API_HOST + "Memes/random/rendered")
+    response = requests.get(API_HOST + "Memes/random/rendered")
+    
+    cd = response.headers.get("Content-Disposition")
+
+
+    if response.status_code == 200:
+        file_bytes = io.BytesIO(response.content)
+        file_bytes.seek(0)  
+
+        file_name = "random_meme.png"
+        cd = response.headers.get("Content-Disposition")
+        if cd:
+            match = re.search(r"filename\*=UTF-8''(.+)", cd)
+            if match:
+                encoded_filename = match.group(1)
+                file_name = urllib.parse.unquote(encoded_filename)
+                
+        await interaction.followup.send(content="Here is the rendered meme!", file=discord.File(fp=file_bytes, filename=file_name))    
+        
+    else:
+        await interaction.followup.send("Failed to get random meme. Status code: " + str(response.status_code))
 
 @bot.tree.command(name="render_meme", description="Render a meme without submitting it to the database")
 @app_commands.describe(visual_file="Upload the image", top_text="Top text of the meme (optional)", bottom_text="Bottom text of the meme (optional)")
