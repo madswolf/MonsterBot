@@ -627,12 +627,25 @@ async def submit_memevisual(
             except Exception as e:
                 logger.info(e.__traceback__)
                 logger.info(traceback.format_exc())
-                return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]")
+                return await interaction.followup.send(f"Topics is not in a valid format. Please enter the topics in a JSON list like so: [\"Topic\", \"Topic2\"]") 
+
+        view = ConfirmView()
+        rendered_meme = await render_meme(interaction, file_bytes, file.filename, "This is a cool test toptext", "RARE BOTTOMTEXT POG")
+        
+        await interaction.followup.send(f"This is an example of a meme rendered with the visual. Do you want to submit it?", file=discord.File(fp=rendered_meme, filename="renderedMeme.png"),view=view)
+        await view.wait()
+        
+        if view.value is None:
+            return await interaction.followup.send("No response, submission cancelled.", ephemeral=True)
+        elif view.value is False:
+            return await interaction.followup.send("Submission cancelled.", ephemeral=True)
+        else:
+            await interaction.followup.send("Proceeding with submission. Please wait.", ephemeral=True)
 
         files = {
             "File": (file.filename, file_bytes)
-        }
-        
+        }       
+
         response = requests.post(API_HOST + "Visuals", data=data, headers=headers, files=files)
         
         if response.status_code == 201:
