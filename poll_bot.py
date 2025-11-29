@@ -342,15 +342,10 @@ async def draw_ticket(
         if response.status_code == 200:
             #await interaction.followup.send("ticket drawn successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
             result = response.json()
-            thumbnails = result["items"]
-            thumbnails.append(result["winningItem"])
-            winning_item_name = result["winningItemName"]
-            winning_rarity = int(result["winningRarity"])
             wasFree = bool(result["wasFree"])
-            target_index = len(thumbnails) - 1
             fps = 20
 
-            file_bytes = generate_gif(thumbnails, winning_item_name, winning_rarity, target_index, fps)
+            file_bytes = generate_gif(result["items"], result["drawnItemWin"], fps)
             await interaction.followup.send(content="FREE SPIN !!!" if wasFree else "", file=discord.File(fp=file_bytes, filename="gif.gif"))  
         elif response.status_code == 400:
             await interaction.followup.send("Not enough dubloons.")
