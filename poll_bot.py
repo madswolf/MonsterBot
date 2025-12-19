@@ -487,7 +487,7 @@ async def delete_element(interaction, id, endpoint, hard_delete = False):
 
         response = requests.delete(API_HOST + endpoint + id, headers=headers, params=params)
         
-        if response.status_code == 200:
+        if response.status_code == 200 or response.status_code == 204:
             await interaction.followup.send("Element deleted successfully!")
         else:
             await interaction.followup.send("Failed to delete element. Status code: " + str(response.status_code))
@@ -773,11 +773,11 @@ def count_pixel_changes(img1, img2):
 
 
 @bot.tree.command(name='delete_place_submission', description='Delete a place submission')
-@app_commands.describe(id='The ID of the element to be deleted.')
-async def delete_meme(interaction: discord.Interaction, id: str):
+@app_commands.describe(id='The ID of the place submission to be deleted.')
+async def delete_place_submission(interaction: discord.Interaction, id: str):
     await defer_ephemeral(interaction)
     if(interaction.user.id != 319532244463255552):
-        return await interaction.followup.send("You are not allowed, need more dubloons")
+        return await interaction.followup.send("You are not allowed. You are not cool enough")
     
     await delete_element(interaction, id, "MemePlaces/submissions/")
 
