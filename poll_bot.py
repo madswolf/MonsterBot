@@ -467,6 +467,36 @@ async def submit_toptext(interaction: discord.Interaction, text: str, topics: st
         logger.info(traceback.format_exc())
         await interaction.followup.send(f"An error occurred: {str(e)}")
 
+@bot.tree.command(name='authenticate_third_party', description='Inititate authentication of a third party service.')
+@app_commands.describe(scope='There are currently two scopes, place submissions and dubloon transfer', third_party_url='Optionally give the url of the third party to prefill the authentication output.')
+async def submit_toptext(interaction: discord.Interaction, scope: Literal["submit_place", "transfer_dubloons"], third_party_url: str = None):
+    await defer_ephemeral(interaction)
+    headers = {
+        'Content-Type': 'application/json',
+        'ExternalUserId': str(interaction.user.id)
+    }
+    if third_party_url == None:
+        if(scope == "submit_place"):
+            third_party_url = "https://canvas.mads.monster"
+        if(scope == "transfer_dubloons"):
+            third_party_url = "https://monnergæld.dk"
+
+    data = {
+        'scope': scope
+    }
+    
+    try:
+        response = requests.post(API_HOST + "auth", headers=headers, json=data)
+        
+        if response.status_code == 201:
+            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        else:
+            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+    except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
 @bot.tree.command(name='delete_votable', description='Delete a Votable (Meme, MemeVisual, MemeText)')
 @app_commands.describe(id='The ID of the element to be deleted.')
 @app_commands.describe(hard_delete='A boolean that determines if the element is deleted or removed from topic')
