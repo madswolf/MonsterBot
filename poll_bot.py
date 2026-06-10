@@ -469,10 +469,11 @@ async def submit_toptext(interaction: discord.Interaction, text: str, topics: st
 
 @bot.tree.command(name='authenticate_third_party', description='Inititate authentication of a third party service.')
 @app_commands.describe(scope='There are currently two scopes, place submissions and dubloon transfer', third_party_url='Optionally give the url of the third party to prefill the authentication output.')
-async def submit_toptext(interaction: discord.Interaction, scope: Literal["submit_place", "transfer_dubloons"], third_party_url: str = None):
+async def authenticate_third_party(interaction: discord.Interaction, scope: Literal["submit_place", "transfer_dubloons"], third_party_url: str = None):
     await defer_ephemeral(interaction)
     headers = {
         'Content-Type': 'application/json',
+        'Bot_Secret': BOT_SECRET,
         'ExternalUserId': str(interaction.user.id)
     }
     if third_party_url == None:
@@ -486,12 +487,14 @@ async def submit_toptext(interaction: discord.Interaction, scope: Literal["submi
     }
     
     try:
-        response = requests.post(API_HOST + "auth", headers=headers, json=data)
+        response = requests.post(API_HOST + "auth/initiate", headers=headers, json=scope)
         
-        if response.status_code == 201:
-            await interaction.followup.send("Memetext created successfully!\n" + "```json\n" + format_json(response.text) + "\n```")
+        if response.status_code == 200:
+            response_data = json.loads(response.text)
+            final_url = f"{third_party_url}?tempPassword={response_data['temporary_password']}"
+            await interaction.followup.send("Success!\n" + "You now have" + str(response_data['expires_in']) + "seconds to authenticate.\n" + f"Url:{final_url}")
         else:
-            await interaction.followup.send("Failed to create meme. Status code: " + str(response.status_code))
+            await interaction.followup.send("Failed to initiate authentication: " + str(response.status_code))
     except Exception as e:
         logger.info(e.__traceback__)
         logger.info(traceback.format_exc())
