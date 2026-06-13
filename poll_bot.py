@@ -38,6 +38,8 @@ load_dotenv()
 # Replace with your bot's token
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 API_HOST = os.getenv('API_HOST')
+CANVAS_HOST = os.getenv('CANVAS_HOST')
+TRADING_HOST = os.getenv('TRADING_HOST')
 BOT_SECRET = os.getenv('BOT_SECRET')
 IS_DEVELOPMENT = os.getenv('IS_DEVELOPMENT')
 CURRENT_PLACEID = os.getenv('CURRENT_PLACEID')
@@ -478,13 +480,9 @@ async def authenticate_third_party(interaction: discord.Interaction, scope: Lite
     }
     if third_party_url == None:
         if(scope == "submit_place"):
-            third_party_url = "https://canvas.mads.monster"
+            third_party_url = CANVAS_HOST
         if(scope == "transfer_dubloons"):
-            third_party_url = "https://monnergæld.dk"
-
-    data = {
-        'scope': scope
-    }
+            third_party_url = TRADING_HOST
     
     try:
         response = requests.post(API_HOST + "auth/initiate", headers=headers, json=scope)
@@ -495,6 +493,28 @@ async def authenticate_third_party(interaction: discord.Interaction, scope: Lite
             await interaction.followup.send("Success!\n" + "You now have" + str(response_data['expires_in']) + "seconds to authenticate.\n" + f"Url:{final_url}")
         else:
             await interaction.followup.send("Failed to initiate authentication: " + str(response.status_code))
+    except Exception as e:
+        logger.info(e.__traceback__)
+        logger.info(traceback.format_exc())
+        await interaction.followup.send(f"An error occurred: {str(e)}")
+
+@bot.tree.command(name='revoke_authentications', description='Revoke all of your issued authentications.')
+@app_commands.describe()
+async def revoke_third_party_authentications(interaction: discord.Interaction):
+    await defer_ephemeral(interaction)
+    headers = {
+        'Content-Type': 'application/json',
+        'Bot_Secret': BOT_SECRET,
+        'ExternalUserId': str(interaction.user.id)
+    }
+    
+    try:
+        response = requests.post(API_HOST + "auth/revoke-all", headers=headers)
+        response_data = json.loads(response.text)
+        if response.status_code == 200:
+            await interaction.followup.send("Success!\n" + "You now have revoked " + str(response_data["revoked"]) + " tokens")
+        else:
+            await interaction.followup.send("Failed to revoke authentications: " + str(response.status_code))
     except Exception as e:
         logger.info(e.__traceback__)
         logger.info(traceback.format_exc())
